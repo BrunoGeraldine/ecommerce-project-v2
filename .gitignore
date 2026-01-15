@@ -5,6 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
+create_tables.sql
+*.log
 
 # Distribution / packaging
 .Python
@@ -136,7 +138,9 @@ celerybeat.pid
 
 # Environments
 credentials/
-credentials
+credentials.json
+*.json
+.env_local
 .env
 .envrc
 .venv
@@ -207,3 +211,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credenciais (NUNCA commitar!)
+credentials.json
+.env
+*.key
+*.pem
