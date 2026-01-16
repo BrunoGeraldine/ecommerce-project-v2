@@ -26,15 +26,25 @@ CHECKLIST DE VALIDAÇÃO
 Antes de prosseguir, confirme:
 
  ✅ Projeto criado no Google Cloud
+ 
  ✅ APIs ativadas (Sheets + Drive)
+ 
  ✅ Service Account criada
+ 
  ✅ Arquivo credentials.json baixado
+ 
  ✅ Planilha compartilhada com service account
+ 
  ✅ Projeto criado no Supabase
+ 
  ✅ Credenciais do Supabase copiadas
+ 
  ✅ Arquivo .env criado e preenchido
+ 
  ✅ Arquivo .gitignore criado
+ 
  ✅ Dependências Python instaladas
+ 
  ✅ Teste de conexão executado com sucesso
 
 
@@ -56,4 +66,5 @@ O GitHub Actions roda diariamente às 3h UTC e sincroniza:
 
 - `GOOGLE_CREDENTIALS`: JSON completo das credenciais
 - `SUPABASE_URL`: URL do projeto
+
 - `SUPABASE_KEY`: Chave anon ou service_role
