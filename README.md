@@ -1,151 +1,209 @@
-# Projeto E-commerce v2 - Integração Google Sheets → Supabase
+# Projeto E-commerce v2 - ETL Google Sheets → Supabase
 
-## 📊 Arquitetura
-- **Fonte**: Google Sheets ("Dados do ecommerce")
-- **Destino**: Supabase (PostgreSQL)
-- **Automação**: GitHub Actions (1x por dia)
+## 📊 Resumo Executivo
+
+Pipeline ETL em **6 camadas** que sincroniza dados entre Google Sheets e Supabase com validação robusta.
+
+- **ETL Principal**: `validate_and_import.py` (validação em cada camada)
+- **Gerador diário**: `generate_daily_sales.py` (popula vendas)
+- **Automação**: GitHub Actions (a cada 5 minutos)
+- **Database**: Supabase (PostgreSQL)
+
+---
+
+## 🏗️ Estrutura do Projeto
 
 ```
 ecommerce-project-v2/
-│
-├── 📁 .github/
-│   └── workflows/
-|       ├── setup_tables.py            # Usar apenas uma vez no inicio de tudo
-|       ├── sync-daily.yml             # Automação diária
-│       └── generate-daily-sales.yml   # Automação diária
-│
 ├── 📁 credentials/
-│   └── credentials.json               # Chaves Google Service Account (⚠️ gitignore)
-│
+│   └── credentials.json            # Google Service Account (⚠️ gitignore)
 ├── 📁 src/
-│   ├── validate_and_import.py         # ETL Principal: Sheets → Supabase Validação + importação dados
-│   └── generate_daily_sales.py        # Gerador diário de vendas (500/dia)
-│
-├── 📄 create_tables.sql               # Schema do banco (gerado automaticamente)
-├── 📄 test_connection.py              # Teste de conectividade
-├── 📄 requirements.txt                # Dependências Python
-├── 📄 README.md                       # Setup e primeiros passos
-├── 📄 ARCHITECTURE.md                 # Este arquivo
-├── 📄 .env                            # Variáveis de ambiente (⚠️ gitignore)
-└── 📄 .gitignore                      # Arquivos ignorados no git
+│   ├── validate_and_import.py      # 🚀 ETL Principal (6 Camadas)
+│   ├── generate_daily_sales.py     # Gerador de vendas diárias
+│   └── test_connection.py           # Teste de conectividade
+├── 📄 ARCHITECTURE.md              # Documentação técnica detalhada
+├── 📄 create_tables.sql            # Schema do banco
+├── 📄 requirements.txt             # Dependências Python
+├── 📄 .env                         # Variáveis de ambiente (⚠️ gitignore)
+└── 📄 .gitignore
 ```
 
-## 🚀 Setup Inicial
+---
 
-CHECKLIST DE VALIDAÇÃO
-Antes de prosseguir, confirme:
+## 🚀 Setup Inicial (5 passos)
 
- ✅ Projeto criado no Google Cloud 
- ✅ APIs ativadas (Sheets + Drive) 
- ✅ Service Account criada 
- ✅ Arquivo credentials.json baixado 
- ✅ Planilha compartilhada com service account 
- ✅ Projeto criado no Supabase 
- ✅ Credenciais do Supabase copiadas 
- ✅ Arquivo .env criado e preenchido 
- ✅ Arquivo .gitignore criado 
- ✅ Dependências Python instaladas 
- ✅ Teste de conexão executado com sucesso
+### 1️⃣ Clonar o repositório
+```bash
+git clone <seu-repo>
+cd ecommerce-project-v2
+```
 
+### 2️⃣ Instalar dependências
+```bash
+pip install -r requirements.txt
+```
 
-1. Clone o repositório
-2. Instale dependências: `pip install -r requirements.txt`
-3. Configure credenciais Google Cloud e coloque em `credentials.json`
-4. Crie arquivo `.env` com as chaves do Supabase
-5. Execute: `python validate_and_import.py`
+### 3️⃣ Configurar Google Sheets
+- Criar projeto no Google Cloud
+- Ativar APIs (Sheets + Drive)
+- Criar Service Account
+- Baixar `credentials.json` para pasta `credentials/`
+- Compartilhar planilha com email do Service Account
 
-## 📅 Sincronização Automática
+### 4️⃣ Configurar Supabase
+- Criar projeto em supabase.com
+- Copiar `SUPABASE_URL` e `SUPABASE_KEY`
+- Criar arquivo `.env`:
+```env
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_KEY=seu-anon-key-aqui
+SPREADSHEET_NAME=Dados do ecommerce
+```
 
-O GitHub Actions roda diariamente às 3h UTC e sincroniza:
-- ✅ clientes
-- ✅ produtos  
-- ✅ preco_competidores
-- ✅ vendas
+### 5️⃣ Executar setup
+```bash
+# Criar tabelas no Supabase
+python create_tables.sql
 
-## 🔧 Configuração GitHub Secrets
+# Testar conexão
+python test_connection.py
 
-- `GOOGLE_CREDENTIALS`: JSON completo das credenciais
-- `SUPABASE_URL`: URL do projeto
-- `SUPABASE_KEY`: Chave anon ou service_role
+# Importar dados iniciais
+python src/validate_and_import.py
+```
 
-📅 QUANDO USAR CADA SCRIPT
-1️⃣ validate_and_import.py - SETUP INICIAL (1 VEZ)
-Quando usar:
+---
 
-✅ Primeira vez que vai popular o banco
-✅ Quando suspeitar de dados corrompidos
-✅ Após fazer mudanças grandes no Google Sheets
-✅ Quando precisar de debug detalhado
+## 📋 Como Usar
 
-Características:
+### Para Importação Inicial
+```bash
+python src/validate_and_import.py
+```
+✅ Valida dados em **6 camadas** antes de inserir
+✅ Mostra erros **linha por linha**
+✅ Ideal para debug e setup
 
-🐢 Mais lento (valida TUDO)
-🔍 Logs super detalhados
-🛡️ Validação em 5 camadas
-📊 Mostra exatamente onde está o erro
+### Para Sincronização Diária
+Via GitHub Actions (automático a cada 5 min):
+1. `generate_daily_sales.py` → Insere vendas no Sheets
+2. `validate_and_import.py` → Sincroniza com Supabase
 
+### Para Gerar Novas Vendas Manualmente
+```bash
+python src/generate_daily_sales.py
+```
+Insere 500 novas vendas no Google Sheets
 
-2️⃣ sync_sheets.py - SINCRONIZAÇÃO DIÁRIA (SEMPRE)
-Quando usar:
+---
 
-✅ Todo dia (via GitHub Actions)
-✅ Quando adicionar novos dados no Sheets
-✅ Quando atualizar dados existentes
-✅ Para manter banco sempre atualizado
+## 🔍 O que Acontece em Cada Execução
 
-Características:
+```
+validate_and_import.py executa:
 
-⚡ Rápido (validação básica)
-🔄 Estratégia TRUNCATE + INSERT (substitui tudo)
-📝 Logs resumidos
-🤖 Perfeito para automação
+📖 Camada 1: Ler dados do Google Sheets
+   └─ Lê célula por célula (evita bugs de concatenação)
 
+🧹 Camada 2-4: Validar & Limpar
+   ├─ Normaliza tipos (texto, decimal, int, data)
+   ├─ Valida campos obrigatórios
+   └─ Remove valores inválidos
 
-🔄 ESTRATÉGIAS DE SINCRONIZAÇÃO
-Opção A: TRUNCATE + INSERT (Recomendado) ✅
-O que faz:
+🔗 Camada 5: Validar Foreign Keys
+   ├─ Carrega IDs existentes em cache
+   ├─ Valida cada FK
+   └─ Remove registros com FKs inválidas
 
-Deleta TODOS os dados da tabela
-Insere TODOS os dados do Google Sheets
+💾 Camada 6: Inserir
+   ├─ Limpa tabelas (DELETE WHERE pk != '___impossible___')
+   ├─ Insere em lotes de 50
+   └─ Retry individual se batch falhar
 
-Vantagens:
+📊 Retorna:
+   ✅ Quantos inseridos
+   ❌ Quantos erros
+```
 
-✅ Simples
-✅ Sempre sincronizado 100%
-✅ Remove dados deletados no Sheets
-✅ Não precisa comparar o que mudou
+---
 
-Desvantagens:
+## 🔧 Configuração GitHub Actions
 
-⚠️ Perde histórico de alterações
-⚠️ IDs auto-incrementais resetam (mas você usa TEXT, então OK!)
+### Setup (uma vez)
+No GitHub, vá para Settings → Secrets e adicione:
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `SPREADSHEET_NAME`
+- `GOOGLE_CREDENTIALS` (base64 de credentials.json)
 
-Quando usar:
+### Para encodar credentials.json em base64
+```bash
+# Linux/Mac
+base64 -i credentials/credentials.json | pbcopy
 
-Seu caso! (dados sempre vêm do Sheets como fonte da verdade)
+# Windows PowerShell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("credentials/credentials.json")) | Set-Clipboard
+```
 
+---
 
-Opção B: UPSERT (Alternativa)
-O que faz:
+## 📊 Modelo de Dados
 
-Para cada linha do Sheets:
+4 tabelas principais:
 
-Se ID existe → UPDATE
-Se ID não existe → INSERT
+| Tabela | Tipo | PK | FKs |
+|--------|------|----|----|
+| `clientes` | Mestres | id_cliente | - |
+| `produtos` | Mestres | id_produto | - |
+| `preco_competidores` | Transacional | - | id_produto → produtos |
+| `vendas` | Transacional | id_venda | id_cliente → clientes, id_produto → produtos |
 
+Para mais detalhes, ver `ARCHITECTURE.md`
 
+---
 
-Vantagens:
+## 🚨 Troubleshooting
 
-✅ Preserva histórico
-✅ Mais eficiente para poucos dados novos
+**❌ "Arquivo credentials.json não encontrado"**
+→ Coloque em `credentials/credentials.json`
 
-Desvantagens:
+**❌ "SUPABASE_URL not found"**
+→ Crie `.env` com `SUPABASE_URL` e `SUPABASE_KEY`
 
-⚠️ Mais complexo
-⚠️ Não remove dados deletados do Sheets
-⚠️ Precisa comparar cada linha
+**❌ "Foreign key constraint violated"**
+→ Verifique se clientes/produtos foram inseridos antes de vendas
 
-Quando usar:
+**❌ "Planilha não encontrada"**
+→ Confirme nome em `.env` e compartilhe sheet com Service Account
 
-Se você precisar manter dados que foram deletados do Sheets
+**⚠️ Script demora muito (> 5 min)**
+→ Verifique conexão de rede e quota da API
+
+---
+
+## 📚 Documentação Completa
+
+Ver `ARCHITECTURE.md` para:
+- Explicação das 6 camadas em detalhes
+- Exemplos de código
+- Performance benchmarks
+- Padrões de design
+- Fluxo de dados completo
+
+---
+
+## 🔐 Segurança
+
+⚠️ **Nunca commit**:
+- `credentials.json`
+- `.env`
+- Qualquer arquivo com tokens/chaves
+
+Verificar `.gitignore` está preenchido:
+```
+credentials.json
+.env
+__pycache__/
+*.pyc
+venv/
+```
