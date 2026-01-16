@@ -1,5 +1,7 @@
 # Google Sheets to Supabase Integration - Complete Documentation
 
+
+
 ## 📋 Table of Contents
 
 1. [Overview](#overview)
@@ -875,7 +877,7 @@ git commit -m "Initial commit: Google Sheets to Supabase integration"
 
 ```bash
 # Add GitHub remote
-git remote add origin https://github.com/YOUR_USERNAME/projeto-ecommerce-v2.git
+git remote add origin https://github.com/BrunoGeraldine/projeto-ecommerce-v2.git
 
 # Push code
 git branch -M main
