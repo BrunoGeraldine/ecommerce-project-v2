@@ -6,18 +6,19 @@
 - **Automação**: GitHub Actions (1x por dia)
 
 projeto-ecommerce-v2/
-├── .github/
-│   └── workflows/
-│       └── (vazio por enquanto)
-├── venv/                      # Ambiente virtual (não commitar)
-├── src/
-│   └── setup_tables.py (AQUI ALOCAREMOS O ARQUIVO)
-├── credentials/
-│   └── credentials.json       # Credenciais Google (não commitar)
-├── .env                       # Variáveis de ambiente (não commitar)
-├── .gitignore                 # Arquivos a ignorar
-├── requirements.txt           # Dependências Python
-├── test_connection.py         # Script de teste
+
+ ├── .github/
+ │   └── workflows/
+ │       └── (vazio por enquanto)
+ ├── venv/                      # Ambiente virtual (não commitar)
+ ├── src/
+ │   └── setup_tables.py (AQUI ALOCAREMOS O ARQUIVO)
+ ├── credentials/
+ │   └── credentials.json       # Credenciais Google (não commitar)
+ ├── .env                       # Variáveis de ambiente (não commitar)
+ ├── .gitignore                 # Arquivos a ignorar
+ ├── requirements.txt           # Dependências Python
+ ├── test_connection.py         # Script de teste
 
 
 ## 🚀 Setup Inicial
@@ -25,8 +26,7 @@ projeto-ecommerce-v2/
 CHECKLIST DE VALIDAÇÃO
 Antes de prosseguir, confirme:
 
- ✅ Projeto criado no Google Cloud
- 
+ ✅ Projeto criado no Google Cloud 
  ✅ APIs ativadas (Sheets + Drive)
  
  ✅ Service Account criada
