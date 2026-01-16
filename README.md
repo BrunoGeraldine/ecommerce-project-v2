@@ -7,7 +7,8 @@
 
 projeto-ecommerce-v2/
 
- ├── .github/
+┌─────────────────────────────────────────────────────────────────┐
+│  ├── .github/
  │   └── workflows/
  │       └── (vazio por enquanto)
  ├── venv/                      # Ambiente virtual (não commitar)
@@ -59,4 +60,5 @@ O GitHub Actions roda diariamente às 3h UTC e sincroniza:
 - `SUPABASE_URL`: URL do projeto
 
 - `SUPABASE_KEY`: Chave anon ou service_role
+
 
