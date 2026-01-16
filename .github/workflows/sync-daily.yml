@@ -1,0 +1,72 @@
+name: Daily Sync - Google Sheets to Supabase
+
+on:
+  schedule:
+    # Roda todo dia às 3h da manhã (UTC)
+    - cron: '0 3 * * *'
+  
+  # Permite execução manual
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Instalar dependências
+        run: |
+          pip install gspread oauth2client supabase python-dotenv
+      
+      - name: Criar arquivo de credenciais
+        run: |
+          mkdir -p credentials
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
+      
+      - name: Executar sincronização
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
+        run: |
+          python sync_sheets.py
+      
+      - name: Limpar credenciais
+        if: always()
+        run: |
+          rm -rf credentials/
+```
+
+---
+
+## **📊 RESUMO DA ESTRATÉGIA**
+
+| Ação | Script | Frequência |
+|------|--------|-----------|
+| **Setup inicial** | `validate_and_import.py` | 1 vez |
+| **Adicionar novos dados** | `sync_sheets.py` (manual ou automático) | Quando quiser |
+| **Sincronização automática** | GitHub Actions → `sync_sheets.py` | Todo dia 3h |
+| **Debug de problemas** | `validate_and_import.py` | Quando necessário |
+
+---
+
+## **🎯 WORKFLOW RECOMENDADO**
+```
+DIA 1 (Hoje):
+├─ Executar validate_and_import.py (setup inicial)
+├─ Verificar dados no Supabase
+└─ Configurar GitHub Actions
+
+DIA 2 EM DIANTE:
+└─ GitHub Actions roda sync_sheets.py automaticamente às 3h
+
+QUANDO ADICIONAR DADOS NO SHEETS:
+├─ Opção 1: Esperar até 3h (automático)
+└─ Opção 2: Rodar sync_sheets.py manualmente

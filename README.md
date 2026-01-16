@@ -44,7 +44,7 @@ Antes de prosseguir, confirme:
 2. Instale dependências: `pip install -r requirements.txt`
 3. Configure credenciais Google Cloud e coloque em `credentials.json`
 4. Crie arquivo `.env` com as chaves do Supabase
-5. Execute: `python setup_tables.py`
+5. Execute: `python validate_and_import.py`
 
 ## 📅 Sincronização Automática
 
@@ -58,7 +58,86 @@ O GitHub Actions roda diariamente às 3h UTC e sincroniza:
 
 - `GOOGLE_CREDENTIALS`: JSON completo das credenciais
 - `SUPABASE_URL`: URL do projeto
-
 - `SUPABASE_KEY`: Chave anon ou service_role
 
+📅 QUANDO USAR CADA SCRIPT
+1️⃣ validate_and_import.py - SETUP INICIAL (1 VEZ)
+Quando usar:
 
+✅ Primeira vez que vai popular o banco
+✅ Quando suspeitar de dados corrompidos
+✅ Após fazer mudanças grandes no Google Sheets
+✅ Quando precisar de debug detalhado
+
+Características:
+
+🐢 Mais lento (valida TUDO)
+🔍 Logs super detalhados
+🛡️ Validação em 5 camadas
+📊 Mostra exatamente onde está o erro
+
+
+2️⃣ sync_sheets.py - SINCRONIZAÇÃO DIÁRIA (SEMPRE)
+Quando usar:
+
+✅ Todo dia (via GitHub Actions)
+✅ Quando adicionar novos dados no Sheets
+✅ Quando atualizar dados existentes
+✅ Para manter banco sempre atualizado
+
+Características:
+
+⚡ Rápido (validação básica)
+🔄 Estratégia TRUNCATE + INSERT (substitui tudo)
+📝 Logs resumidos
+🤖 Perfeito para automação
+
+
+🔄 ESTRATÉGIAS DE SINCRONIZAÇÃO
+Opção A: TRUNCATE + INSERT (Recomendado) ✅
+O que faz:
+
+Deleta TODOS os dados da tabela
+Insere TODOS os dados do Google Sheets
+
+Vantagens:
+
+✅ Simples
+✅ Sempre sincronizado 100%
+✅ Remove dados deletados no Sheets
+✅ Não precisa comparar o que mudou
+
+Desvantagens:
+
+⚠️ Perde histórico de alterações
+⚠️ IDs auto-incrementais resetam (mas você usa TEXT, então OK!)
+
+Quando usar:
+
+Seu caso! (dados sempre vêm do Sheets como fonte da verdade)
+
+
+Opção B: UPSERT (Alternativa)
+O que faz:
+
+Para cada linha do Sheets:
+
+Se ID existe → UPDATE
+Se ID não existe → INSERT
+
+
+
+Vantagens:
+
+✅ Preserva histórico
+✅ Mais eficiente para poucos dados novos
+
+Desvantagens:
+
+⚠️ Mais complexo
+⚠️ Não remove dados deletados do Sheets
+⚠️ Precisa comparar cada linha
+
+Quando usar:
+
+Se você precisar manter dados que foram deletados do Sheets
