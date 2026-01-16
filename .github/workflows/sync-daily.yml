@@ -29,10 +29,30 @@ jobs:
         run: |
           pip install gspread oauth2client supabase python-dotenv
       
-      - name: Criar arquivo de credenciais
+      - name: Create credentials directory
         run: |
           mkdir -p credentials
+      
+      - name: Criar arquivo de credenciais
+        run: |
           echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
+      
+      - name: Verify credentials file
+        run: |
+          echo "Checking if credentials file exists and is valid JSON..."
+          if [ -f credentials/credentials.json ]; then
+            echo "✅ File exists"
+            echo "File size: $(stat -f%z credentials/credentials.json 2>/dev/null || stat -c%s credentials/credentials.json)"
+            if python -m json.tool credentials/credentials.json > /dev/null 2>&1; then
+              echo "✅ Valid JSON"
+            else
+              echo "❌ Invalid JSON"
+              exit 1
+            fi
+          else
+            echo "❌ File not found"
+            exit 1
+          fi
       
       - name: Executar sincronização
         env:
@@ -40,8 +60,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
         run: |
-          python src/validate_and_import.py
-          
+          python src/sync_sheets.py
       
       - name: Limpar credenciais
         if: always()
