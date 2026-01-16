@@ -144,6 +144,8 @@ credentials.json
 .env
 .envrc
 .venv
+*.key
+*.pem
 env/
 venv/
 ENV/
@@ -221,3 +223,6 @@ credentials.json
 .env
 *.key
 *.pem
+__pycache__/
+*.py[cod]
+*$py.class
