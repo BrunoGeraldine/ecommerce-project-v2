@@ -3,7 +3,8 @@ name: Generate Daily Sales
 on:
   schedule:
     # Roda todo dia às 3h da manhã (UTC)
-    - cron: '0 3 * * *'
+    - cron: '*/5 * * * *'
+#    - cron: '0 3 * * *'
 
   #schedule:
   #  # Gera vendas a cada 3 minutos

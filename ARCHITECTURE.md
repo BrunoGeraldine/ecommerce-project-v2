@@ -2,13 +2,13 @@
 
 ## 📋 Visão Geral
 
-Este projeto implementa um **pipeline ETL (Extract, Transform, Load)** que sincroniza dados entre Google Sheets e Supabase (PostgreSQL), com suporte a geração automática de vendas diárias.
+Este projeto implementa um **pipeline ETL (Extract, Transform, Load)** em 6 camadas que sincroniza dados entre Google Sheets e Supabase (PostgreSQL), com suporte a geração automática de vendas diárias.
 
 ```
-┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-│  Google Sheets   │  →   │   Python ETL     │  →   │    Supabase      │
-│  (Dados Mestres) │      │  (Transformação) │      │  (PostgreSQL)    │
-└──────────────────┘      └──────────────────┘      └──────────────────┘
+┌──────────────────┐      ┌────────────────────────┐      ┌──────────────────┐
+│  Google Sheets   │  →   │  validate_and_import   │  →   │    Supabase      │
+│  (Dados Mestres) │      │  (6 Camadas de ETL)    │      │  (PostgreSQL)    │
+└──────────────────┘      └────────────────────────┘      └──────────────────┘
                                    ↓
                           ┌──────────────────┐
                           │ GitHub Actions   │
@@ -31,9 +31,9 @@ ecommerce-project-v2/
 │   └── credentials.json               # Chaves Google Service Account (⚠️ gitignore)
 │
 ├── 📁 src/
-│   ├── sync_sheets.py                 # ETL Principal: Sheets → Supabase
-│   ├── validate_and_import.py         # Validação + importação dados
-│   ├── generate_daily_sales.py        # Gerador diário de vendas (500/dia)
+│   ├── validate_and_import.py         # 🚀 ETL Principal (6 camadas)
+│   ├── test_connection.py              # Teste de conectividade
+│   ├── generate_daily_sales.py         # Gerador diário de vendas (500/dia)
 │   ├── generate_daily_sales_20salesday.py   # Versão leve (20/dia)
 │   └── generate_daily_sales500salesday.py   # Versão completa (500/dia)
 │
@@ -46,99 +46,344 @@ ecommerce-project-v2/
 └── 📄 .gitignore                      # Arquivos ignorados no git
 ```
 
-
-```
-ecommerce-project-v2/
-│
-├── 📁 .github/
-│   └── workflows/
-|       ├── sync-daily.yml              # Automacao Sheets → Supabase
-│       └── generate-daily-sales.yml    # Automação diária → Gera dados na planilha sheets
-│
-├── 📁 credentials/
-│   └── credentials.json               # Chaves Google Service Account (⚠️ gitignore)
-│
-├── 📁 src/
-│   ├── sync_sheets.py                 # ETL Principal: Sheets → Supabase
-│   ├── validate_and_import.py         # Validação + importação dados
-│   └── generate_daily_sales.py        # Gerador diário de vendas (500/dia)
-│
-├── 📄 create_tables.sql               # Schema do banco (gerado automaticamente)
-├── 📄 test_connection.py              # Teste de conectividade
-├── 📄 requirements.txt                # Dependências Python
-├── 📄 README.md                       # Setup e primeiros passos
-├── 📄 ARCHITECTURE.md                 # Este arquivo
-├── 📄 .env                            # Variáveis de ambiente (⚠️ gitignore)
-└── 📄 .gitignore                      # Arquivos ignorados no git
-```
-
-
 ---
 
-## 🔄 Pipeline ETL
+## 🔄 Pipeline ETL - 6 Camadas
 
-### **Etapa 1: EXTRAÇÃO (Extract)**
+`validate_and_import.py` implementa um sistema de importação **robusto e escalável** em 6 camadas independentes:
 
-**Fonte**: Google Sheets ("Dados do ecommerce")
+### **Camada 1: SCHEMA (Definição)**
 
-**O que é extraído**:
-- Tabela `clientes`: id_cliente, nome_cliente, estado, país, data_cadastro
-- Tabela `produtos`: id_produto, nome_produto, categoria, marca, preço, data_criação
-- Tabela `preco_competidores`: id_produto, concorrente, preço, data_coleta
-- Tabela `vendas`: id_venda, data, cliente, produto, canal, quantidade, preço unitário
+**Propósito**: Definir a estrutura esperada de cada tabela
 
-**Como funciona**:
+**Dados armazenados**:
+- Colunas esperadas
+- Campos obrigatórios
+- Tipos de dados
+- Foreign Keys e tabelas referenciadas
+
 ```python
-# sync_sheets.py - Etapa de Extração
-spreadsheet = gc.open(SPREADSHEET_NAME)  # Autentica com OAuth2
-worksheet = spreadsheet.worksheet(sheet_name)
-all_values = worksheet.get_all_values()  # Lê toda a planilha
+SCHEMAS = {
+    'clientes': {
+        'columns': ['id_cliente', 'nome_cliente', 'estado', 'pais', 'data_cadastro'],
+        'required': ['id_cliente'],
+        'types': {
+            'id_cliente': 'text',
+            'nome_cliente': 'text',
+            'estado': 'text',
+            'pais': 'text',
+            'data_cadastro': 'date'
+        }
+    },
+    'vendas': {
+        'columns': ['id_venda', 'data_venda', 'id_cliente', 'id_produto', 'canal_venda', 'quantidade', 'preco_unitario'],
+        'required': ['id_venda'],
+        'foreign_keys': {
+            'id_cliente': 'clientes',
+            'id_produto': 'produtos'
+        },
+        'types': {...}
+    }
+}
 ```
-
-**Autenticação**: OAuth2 via Service Account (credenciais.json)
 
 ---
 
-### **Etapa 2: TRANSFORMAÇÃO (Transform)**
+### **Camada 2: LIMPEZA & CONVERSÃO (Transform)**
 
-**Função**: `limpar_valor(valor, nome_coluna)`
+**Funções especializadas** por tipo de dado:
 
-Normaliza dados conforme o tipo de coluna:
-
-| Tipo | Transformação | Exemplo |
-|------|---|---|
-| **Preço** | Remove símbolos, converte `,` para `.`, float | `"R$ 45,50"` → `45.50` |
-| **Quantidade** | Extrai dígitos, converte int | `"5 unidades"` → `5` |
-| **Data** | Converte para `YYYY-MM-DD` | `"15/01/2026"` → `"2026-01-15"` |
-| **Texto** | Normaliza espaços múltiplos | `"São  Paulo"` → `"São Paulo"` |
+| Função | Entrada | Saída | Exemplo |
+|--------|---------|-------|---------|
+| `clean_text()` | `str` | `str` (normalizado) | `"  São  Paulo  "` → `"São Paulo"` |
+| `clean_decimal()` | `str` | `float` | `"R$ 45,50"` → `45.50` |
+| `clean_integer()` | `str` | `int` | `"5 unidades"` → `5` |
+| `clean_date()` | `str` | `str (YYYY-MM-DD)` | `"15/01/2026"` → `"2026-01-15"` |
 
 **Validações**:
-- Remove linhas em branco
-- Detecta e corrige células concatenadas (bug Google Sheets)
-- Remove valores nulos/vazios
+- Remove espaços múltiplos e caracteres invisíveis
+- Converte vírgula → ponto para decimais
+- Suporta múltiplos formatos de data (DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY)
+- Valida ranges (ex: preço não pode ser negativo)
+- Retorna `None` para valores inválidos/vazios
 
 ---
 
-### **Etapa 3: CARREGAMENTO (Load)**
+### **Camada 3: LEITURA SEGURA (Extract)**
 
-**Destino**: Supabase (PostgreSQL REST API)
+**Função**: `read_sheet_safe(sheet_name)`
 
-**Estratégia de inserção**:
-- **UPSERT** para tabelas com chave primária (clientes, produtos, vendas)
-  - Se registro existe: atualiza
-  - Se não existe: insere
-- **INSERT** para tabelas sem PK (preco_competidores)
+**Propósito**: Ler Google Sheets célula por célula para evitar bugs de concatenação
 
-**Ordem de execução** (respeita Foreign Keys):
-1. `clientes` (sem dependências)
-2. `produtos` (sem dependências)
-3. `preco_competidores` (FK → produtos)
-4. `vendas` (FK → clientes, produtos)
+```python
+def read_sheet_safe(sheet_name: str) -> Tuple[List[str], List[Dict[str, str]]]:
+    """
+    Lê Google Sheets de forma segura
+    
+    Retorna:
+        - headers: ['id_cliente', 'nome_cliente', ...]
+        - records: [{'id_cliente': '001', 'nome_cliente': 'João', ...}, ...]
+    """
+    # 1. Pegar matriz completa de valores
+    all_values = worksheet.get_all_values()
+    
+    # 2. Primeira linha = headers (normalizar)
+    headers = [h.strip().lower().replace(' ', '_') for h in all_values[0]]
+    
+    # 3. Resto = dados (converter para dicts)
+    for row in all_values[1:]:
+        record = {}
+        for col_idx, header in enumerate(headers):
+            record[header] = row[col_idx] if col_idx < len(row) else ''
+        records.append(record)
+    
+    return headers, records
+```
 
-**Tratamento de erros**:
-- Inserção em batches de 1000 registros
-- Erros de FK são capturados e registrados
-- Sincronização continua mesmo com falhas (não é tudo-ou-nada)
+**Por que segura?**
+- ✅ Evita bugs onde primeira célula contém múltiplos valores
+- ✅ Lê célula por célula (não linha inteira)
+- ✅ Normaliza headers automaticamente
+- ✅ Adiciona metadados (`_row_number` para debugging)
+
+---
+
+### **Camada 4: VALIDAÇÃO DE REGISTROS (Validate)**
+
+**Função**: `validate_and_clean_row(row, table_name, row_number)`
+
+**Propósito**: Validar UM registro com erros detalhados
+
+**Validações realizadas**:
+1. Campo encontrado no sheet (permite variações de nome)
+2. Tipo de dados correto
+3. Campos obrigatórios presentes
+4. Valores dentro de ranges esperados
+
+**Exemplo de uso**:
+```python
+for record in raw_records:
+    is_valid, cleaned_row, errors = validate_and_clean_row(
+        record,
+        'vendas',
+        row_number=15
+    )
+    
+    if is_valid:
+        cleaned_data.append(cleaned_row)
+    else:
+        print(f"Erro na linha 15: {errors}")
+        # Erro específico: "Campo obrigatório 'id_venda' vazio"
+```
+
+**Retorna**:
+- `is_valid`: bool
+- `cleaned_row`: Dict com valores normalizados ou None
+- `errors`: List[str] com descrição de cada erro
+
+---
+
+### **Camada 5: VALIDAÇÃO FOREIGN KEYS (Validate FK)**
+
+**Função**: `validate_foreign_keys(cleaned_data, table_name)`
+
+**Propósito**: Garantir que FKs existem antes de inserir (previne erro 23503)
+
+**Como funciona**:
+1. Carrega IDs existentes de tabelas referenciadas em **cache**
+2. Para cada registro: verifica se `id_cliente` existe em `clientes`
+3. Remove registros com FKs inválidas
+4. Log detalhado de qual FK falhou
+
+```python
+# Exemplo para tabela 'vendas'
+valid_data, fk_errors = validate_foreign_keys(cleaned_data, 'vendas')
+
+# Resultado:
+# valid_data: [registro1, registro2, ...]  (apenas com FKs válidas)
+# fk_errors: [
+#     "Linha 15: FK inválida - id_cliente='CLI_999' não existe em clientes.id_cliente",
+#     "Linha 42: FK inválida - id_produto='PRD_888' não existe em produtos.id_produto"
+# ]
+```
+
+**Benefícios**:
+- ✅ Evita FK constraint violations
+- ✅ Identificar exatamente qual registro foi rejeitado
+- ✅ Cache de IDs para performance
+- ✅ Sincronização idempotente (remove dados órfãos)
+
+---
+
+### **Camada 6: IMPORTAÇÃO (Load)**
+
+**Função**: `import_with_validation(sheet_name, table_name)`
+
+**Fluxo completo** com 5 etapas internas:
+
+```
+📖 ETAPA 1: Lendo dados do Google Sheets
+  └─ read_sheet_safe() → headers + raw_records
+
+🧹 ETAPA 2: Validando e limpando dados
+  └─ validate_and_clean_row() × N → cleaned_data + validation_errors
+
+🔗 ETAPA 3: Validando Foreign Keys
+  └─ validate_foreign_keys() → valid_data + fk_errors
+
+📋 ETAPA 4: Exemplo do primeiro registro
+  └─ Mostra estrutura completa para debug
+
+🗑️  ETAPA 5: Limpando tabela
+  └─ DELETE WHERE pk != '___impossible___' (equiv. TRUNCATE)
+
+💾 ETAPA 6: Inserindo dados
+  └─ Lotes de 50 + retry individual se falhar
+```
+
+**Retorna estatísticas**:
+```python
+{
+    'total_rows': 250,           # Linhas lidas do Sheets
+    'empty_rows': 0,             # Linhas em branco
+    'valid_rows': 245,           # Passou em todas validações
+    'invalid_rows': 5,           # Falhou validação de schema
+    'fk_errors': 0,              # FK inválidas
+    'inserted': 245,             # Inseridos com sucesso
+    'insert_errors': 0           # Erros na inserção
+}
+```
+
+---
+
+## 🎯 Ordem de Execução Obrigatória
+
+Respeita dependências Foreign Key:
+
+```
+1. clientes    (sem dependências)
+   └─ Seu próprio schema
+   
+2. produtos    (sem dependências)
+   └─ Seu próprio schema
+   
+3. preco_competidores  (depende de produtos)
+   └─ FK: id_produto → produtos
+   
+4. vendas      (depende de clientes + produtos)
+   └─ FK: id_cliente → clientes
+   └─ FK: id_produto → produtos
+```
+
+**Se executado fora de ordem**: Camada 5 (Validação FK) rejeitará registros com FKs inválidas automaticamente.
+
+---
+
+## 🚀 Scripts Principais
+
+### 1. `validate_and_import.py` - ETL Principal ⭐
+
+**Propósito**: Importar dados do Google Sheets com validação em 6 camadas
+
+**Comando**:
+```bash
+python src/validate_and_import.py
+```
+
+**O que faz**:
+1. ✅ Valida estrutura de cada tabela (schema)
+2. ✅ Limpa valores conforme tipo
+3. ✅ Lê Google Sheets células por célula
+4. ✅ Valida campos obrigatórios
+5. ✅ Valida Foreign Keys
+6. ✅ Importa com retry e logging detalhado
+
+**Tempo típico**: 2-3 minutos (11.000+ registros)
+
+**Output esperado**:
+```
+🚀 SISTEMA DE IMPORTAÇÃO COM VALIDAÇÃO
+📅 2026-01-16 10:30:45
+📊 Planilha: Dados do ecommerce
+
+================================================================================
+📥 IMPORTANDO: clientes → clientes
+================================================================================
+
+📖 ETAPA 1: Lendo dados do Google Sheets...
+  ✓ Colunas: ['id_cliente', 'nome_cliente', 'estado', 'pais', 'data_cadastro']
+  ✓ Total de linhas (não-vazias): 250
+
+🧹 ETAPA 2: Validando e limpando dados...
+  ✓ Registros válidos: 250
+  ✗ Registros inválidos: 0
+
+💾 ETAPA 5: Inserindo dados no Supabase...
+  ✓ Lote 1: 50 registros inseridos
+  ✓ Lote 2: 50 registros inseridos
+  ...
+
+────────────────────────────────────────────────────────────────────────────────
+✅ IMPORTAÇÃO CONCLUÍDA
+────────────────────────────────────────────────────────────────────────────────
+  Total de linhas lidas:        250
+  Registros válidos:            250
+  Registros inválidos:          0
+  Erros de FK:                  0
+  Inseridos com sucesso:        250
+  Erros de inserção:            0
+────────────────────────────────────────────────────────────────────────────────
+
+📊 RESUMO GERAL DA IMPORTAÇÃO
+  Total de registros inseridos: 11,378
+  Total de erros:               0
+```
+
+---
+
+### 2. `generate_daily_sales.py` - Gerador de Vendas Diárias
+
+**Propósito**: Simular e popular vendas diárias no Google Sheets com dados realistas
+
+**Características**:
+- Gera 500 vendas por dia (configurável por versão)
+- Insere em batches de 100 no Google Sheets
+- Respeita apenas IDs **válidos** de clientes e produtos (queries live ao Supabase)
+- Canal: "Loja Física" ou "Ecommerce" (aleatório 50/50)
+- Preço unitário: baseado em `preco_atual` do produto ± 0-20% variação
+- Quantidades: 1-5 unidades por venda
+
+**Versões disponíveis**:
+| Arquivo | Volume | Uso |
+|---------|--------|-----|
+| `generate_daily_sales_20salesday.py` | 20 vendas/dia | Testes rápidos, CI/CD |
+| `generate_daily_sales.py` | 500 vendas/dia | Produção, relatórios realistas |
+| `generate_daily_sales500salesday.py` | 500 vendas/dia | Alias/backup |
+
+Todas as versões consultam **dados reais** do Supabase para garantir IDs válidos.
+
+**Comando**:
+```bash
+python src/generate_daily_sales.py
+```
+
+---
+
+### 3. `test_connection.py` - Teste de Conectividade
+
+**Propósito**: Verificar se as credenciais estão corretas
+
+**Comando**:
+```bash
+python test_connection.py
+```
+
+**Output esperado**:
+```
+✅ Google Sheets conectado
+✅ Supabase conectado
+✅ Schema verificado
+```
 
 ---
 
@@ -201,7 +446,6 @@ CREATE TABLE public.preco_competidores (
     nome_concorrente TEXT,
     preco_concorrente DECIMAL(10,2),
     data_coleta DATE
-    -- ⚠️ Sem PK, permite múltiplas linhas por produto/concorrente
 );
 ```
 
@@ -218,95 +462,6 @@ CREATE TABLE public.vendas (
 );
 ```
 
-### Índices de Performance
-- `idx_preco_competidores_id_produto` (buscar preços de um produto)
-- `idx_vendas_data_venda` (relatórios por período)
-- `idx_vendas_id_cliente` (histórico do cliente)
-- `idx_produtos_categoria` (filtros de categoria)
-
----
-
-## 🚀 Scripts Principais
-
-### 1. `sync_sheets.py` - Sincronização Principal
-
-**Propósito**: Sincronizar dados mestres do Google Sheets com Supabase
-
-**Fluxo**:
-```
-Etapa 1: LIMPEZA
-├─ TRUNCATE TABLE public.clientes CASCADE
-├─ TRUNCATE TABLE public.produtos CASCADE
-├─ TRUNCATE TABLE public.preco_competidores CASCADE
-└─ TRUNCATE TABLE public.vendas CASCADE
-
-Etapa 2: POPULAÇÃO
-├─ Ler clientes do Sheets → Limpar → UPSERT no Supabase
-├─ Ler produtos do Sheets → Limpar → UPSERT no Supabase
-├─ Ler preço_competidores do Sheets → Limpar → INSERT no Supabase
-└─ Ler vendas do Sheets → Limpar → UPSERT no Supabase
-```
-
-**Tempo típico**: 1-2 minutos (4000+ registros)
-
-**Comando**:
-```bash
-python src/sync_sheets.py
-```
-
----
-
-### 2. `generate_daily_sales.py` - Gerador de Vendas Diárias
-
-**Propósito**: Simular e popular vendas diárias no Google Sheets
-
-**Características**:
-- Gera 500 vendas por dia
-- Insere em batches de 100
-- Respeita IDs válidos de clientes e produtos (queries do Supabase)
-- Canal: "Loja Física" ou "Ecommerce" (aleatório)
-- Preço: baseado em `preco_atual` do produto ± variação
-
-**Versões disponíveis**:
-- `generate_daily_sales_20salesday.py` - Leve (20 vendas)
-- `generate_daily_sales.py` - Padrão (500 vendas)
-- `generate_daily_sales500salesday.py` - Completa (500 vendas explícito)
-
-**Comando**:
-```bash
-python src/generate_daily_sales.py
-```
-
----
-
-### 3. `validate_and_import.py` - Validação & Importação
-
-**Propósito**: Validar dados e importar de forma granular
-
-**Funções**:
-- Testa conexão com Google Sheets
-- Testa conexão com Supabase
-- Valida tipos de dados
-- Detecta duplicatas
-- Importa com validação linha por linha
-
----
-
-### 4. `test_connection.py` - Teste de Conectividade
-
-**Propósito**: Verificar se as credenciais estão corretas
-
-```bash
-python test_connection.py
-```
-
-**Output esperado**:
-```
-✅ Google Sheets conectado
-✅ Supabase conectado
-✅ Schema verificado
-```
-
 ---
 
 ## 🔐 Autenticação & Credenciais
@@ -314,21 +469,6 @@ python test_connection.py
 ### Google Sheets (OAuth2 Service Account)
 
 **Arquivo**: `credentials.json` (⚠️ NÃO commitar)
-
-```json
-{
-  "type": "service_account",
-  "project_id": "seu-projeto",
-  "private_key_id": "...",
-  "private_key": "...",
-  "client_email": "seu-sa@seu-projeto.iam.gserviceaccount.com",
-  "client_id": "...",
-  "auth_uri": "...",
-  "token_uri": "...",
-  "auth_provider_x509_cert_url": "...",
-  "client_x509_cert_url": "..."
-}
-```
 
 **Scopes usados**:
 - `https://spreadsheets.google.com/feeds`
@@ -372,7 +512,7 @@ Instalar: `pip install -r requirements.txt`
 2. Instala dependências Python
 3. Executa `generate_daily_sales.py`
 4. Insere novas vendas no Google Sheets
-5. GitHub Actions executa `sync_sheets.py` automaticamente
+5. GitHub Actions executa `validate_and_import.py` automaticamente
 
 **Segredos do GitHub** (necesários):
 - `SUPABASE_URL`
@@ -381,144 +521,79 @@ Instalar: `pip install -r requirements.txt`
 
 ---
 
-## 🔄 Tratamento de Erros & FK Constraints
+## 📊 Performance & Benchmarks
 
-### Problema: Foreign Key Violations
+| Operação | Registros | Tempo |
+|----------|-----------|-------|
+| Leitura Google Sheets | 11.378+ | 45-60 seg |
+| Validação & limpeza (camadas 2-4) | 11.378+ | 30-45 seg |
+| Validação FK (camada 5) | 11.378+ | 20-30 seg |
+| Limpeza de tabela (DELETE) | - | < 5 seg |
+| Inserção em batches (camada 6) | 11.378+ | 60-90 seg |
+| **Total (pipeline completo)** | **11.378+** | **2-3 min** |
 
-**Cenário**: Tentativa de inserir venda com `id_cliente` que não existe
-
-**Sintoma**:
-```
-❌ Erro: insert or update on table "vendas" violates foreign key constraint
-```
-
-**Causas**:
-1. Dados inconsistentes no Google Sheets
-2. IDs de cliente/produto não existem em `clientes`/`produtos`
-3. Sync parcial (vendas inseridas antes de clientes)
-
-**Solução implementada**:
-- Sync em ordem: clientes → produtos → preco_competidores → vendas
-- Logging detalhado de erros por registro
-- Inserção em batches permite identificar quais registros falharam
-
----
-
-## 📊 Fluxo de Dados Típico
-
-### Dia 1: Setup Inicial
-
-```
-1. Criar schema no Supabase (create_tables.sql)
-2. Preencher dados mestres no Google Sheets (clientes, produtos)
-3. Executar: python src/sync_sheets.py
-   → Limpa tabelas (TRUNCATE CASCADE)
-   → Insere clientes e produtos
-4. Executar: python src/generate_daily_sales.py
-   → Insere 500 vendas + preços competidores no Sheets
-5. Executar novamente: python src/sync_sheets.py
-   → Insere as novas vendas no Supabase
-```
-
-### Dia 2+: Operação Contínua
-
-```
-00:00 UTC → GitHub Actions dispara workflow
-   ├─ generate_daily_sales.py: insere 500 novas vendas no Sheets
-   └─ sync_sheets.py: sincroniza tudo com Supabase
-        (mantém dados mestres, adiciona novas vendas)
-```
+**Notas**:
+- Batch size: 50 registros (otimizado para timeout da API)
+- FK cache: carregado uma vez por tabela (performance one-time)
+- Retry individual: só ocorre se batch falhar (raro)
+- Validação de schema: ~O(n) onde n = número de registros
 
 ---
 
 ## 🎯 Padrões de Design
 
-### 1. **ETL (Extract, Transform, Load)**
-Separação clara das responsabilidades em 3 etapas
+### 1. **Separação de Responsabilidades**
+Cada camada faz UMA coisa bem:
+- Camada 1: Define schema
+- Camada 2: Converte tipos
+- Camada 3: Lê dados
+- Camada 4: Valida registros
+- Camada 5: Valida FKs
+- Camada 6: Insere dados
 
-### 2. **UPSERT Pattern**
-Idempotência: executar script 2x = mesmo resultado
+### 2. **Idempotência**
+Executar script múltiplas vezes = mesmo resultado:
+- DELETE tudo antes de INSERT
+- Não há duplicatas ou dados órfãos
+- Seguro para execução repetida
 
-### 3. **Batch Processing**
-Inserção em lotes de 1000 para melhor performance
+### 3. **Validação Progressiva**
+Filtrar dados "ruins" o mais cedo possível:
+- Camada 4: remove schema inválido (~0.2% de overhead)
+- Camada 5: remove FKs inválidas (~1-2% de overhead)
+- Camada 6: só insere dados garantidamente válidos
 
-### 4. **Graceful Degradation**
-Erros em um registro não interrompem todo o sync
+### 4. **Logging Detalhado**
+Cada erro mostra:
+- Número da linha
+- Campo específico
+- Valor recebido
+- Valor esperado
 
-### 5. **Dependency Order**
-Tabelas de referência antes de tabelas que as dependem
-
----
-
-## 📈 Performance
-
-| Operação | Registros | Tempo |
-|----------|-----------|-------|
-| Limpeza (TRUNCATE CASCADE) | 4000+ | < 1 min |
-| Extração Google Sheets | 4000+ | 30-45 seg |
-| Transformação (limpeza valores) | 4000+ | 10-15 seg |
-| Inserção (4 tabelas) | 4000+ | 30-60 seg |
-| **Total (sync completo)** | **4000+** | **1-2 min** |
-
----
-
-## 🚨 Monitoramento & Logs
-
-**Saída esperada do sync_sheets.py**:
-
-```
-======================================================================
-🔄 SINCRONIZAÇÃO GOOGLE SHEETS → SUPABASE
-📅 2026-01-16 10:30:45
-======================================================================
-
-======================================================================
-🗑️  ETAPA 1: LIMPANDO TABELAS
-======================================================================
-  ✓ clientes: limpo
-  ✓ produtos: limpo
-  ✓ preco_competidores: limpo
-  ✓ vendas: limpo
-
-======================================================================
-📥 ETAPA 2: POPULANDO TABELAS
-======================================================================
-
-🔄 clientes
-  📖 Lendo clientes... ✓ 250 linhas
-  🧹 Processando... ✓ 250 válidos
-  💾 Inserindo... ✓ 250/250 inseridos
-
-...
-
-======================================================================
-📊 RESUMO
-======================================================================
-  ✅ Inseridos: 4018
-  ❌ Erros:     0
-======================================================================
-
-✅ Sincronização concluída com sucesso!
-```
+### 5. **Graceful Degradation**
+Erros em registros não interrompem sync:
+- Batch falha → retry individual
+- Registros individuais falham → continua próximo
+- Log de cada falha → auditoria completa
 
 ---
 
 ## 🔍 Troubleshooting
 
-### Erro: "File not found credentials.json"
-→ Coloque o arquivo em `credentials/credentials.json`
+### Erro: "Arquivo credentials.json não encontrado"
+→ Coloque em `credentials/credentials.json`
 
 ### Erro: "SUPABASE_URL not found"
 → Crie `.env` na raiz com `SUPABASE_URL` e `SUPABASE_KEY`
 
-### Erro: "Foreign key constraint violated"
+### Erro: "Foreign key constraint violated (erro 23503)"
 → Verifique se clientes/produtos foram inseridos antes de vendas
 
-### Erro: "Spreadsheet not found"
-→ Confirme nome correto em `.env` e compartilhe sheet com service account
+### Erro: "Planilha não encontrada"
+→ Confirme nome em `.env` e compartilhe sheet com service account email
 
-### Lentidão na limpeza (> 10 min)
-→ Use `TRUNCATE CASCADE` (já implementado em sync_sheets.py)
+### Script demora muito (> 5 min)
+→ Verifique conexão de rede e quota da API Google Sheets
 
 ---
 
@@ -532,4 +607,4 @@ Tabelas de referência antes de tabelas que as dependem
 ---
 
 **Última atualização**: Janeiro 2026
-**Versão**: 2.0 (Refatoração ETL com TRUNCATE + UPSERT)
+**Versão**: 3.0 (6 Camadas ETL com validate_and_import.py)

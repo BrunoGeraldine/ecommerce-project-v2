@@ -43,7 +43,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
         run: |
-          python src/validate_and_import.py
+          python src/sync_sheets.py
       
       - name: Limpar credenciais
         if: always()

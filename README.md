@@ -5,22 +5,30 @@
 - **Destino**: Supabase (PostgreSQL)
 - **Automação**: GitHub Actions (1x por dia)
 
-projeto-ecommerce-v2/
-
-┌─────────────────────────────────────────────────────────────────────────┐
-│   ├── .github/                                                          |
-|   │   └── workflows/                                                    |
-|   │       └── (vazio por enquanto)                                      |
-|   ├── venv/                      # Ambiente virtual (não commitar)      |
-|   ├── src/                                                              |
-|   │   └── setup_tables.py (AQUI ALOCAREMOS O ARQUIVO)                   |
-|   ├── credentials/                                                      |
-|   │   └── credentials.json       # Credenciais Google (não commitar)    |
-|   ├── .env                       # Variáveis de ambiente (não commitar) |
-|   ├── .gitignore                 # Arquivos a ignorar                   |
-|   ├── requirements.txt           # Dependências Python                  |
-|   ├── test_connection.py         # Script de teste                      |
-└─────────────────────────────────────────────────────────────────────────┘
+```
+ecommerce-project-v2/
+│
+├── 📁 .github/
+│   └── workflows/
+|       ├── setup_tables.py            # Usar apenas uma vez no inicio de tudo
+|       ├── sync-daily.yml             # Automação diária
+│       └── generate-daily-sales.yml   # Automação diária
+│
+├── 📁 credentials/
+│   └── credentials.json               # Chaves Google Service Account (⚠️ gitignore)
+│
+├── 📁 src/
+│   ├── validate_and_import.py         # ETL Principal: Sheets → Supabase Validação + importação dados
+│   └── generate_daily_sales.py        # Gerador diário de vendas (500/dia)
+│
+├── 📄 create_tables.sql               # Schema do banco (gerado automaticamente)
+├── 📄 test_connection.py              # Teste de conectividade
+├── 📄 requirements.txt                # Dependências Python
+├── 📄 README.md                       # Setup e primeiros passos
+├── 📄 ARCHITECTURE.md                 # Este arquivo
+├── 📄 .env                            # Variáveis de ambiente (⚠️ gitignore)
+└── 📄 .gitignore                      # Arquivos ignorados no git
+```
 
 ## 🚀 Setup Inicial
 
