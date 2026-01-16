@@ -27,8 +27,8 @@ jobs:
       
       - name: Criar arquivo de credenciais
         run: |
-          mkdir -p credentials
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
+          mkdir -p ../credentials
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > ../credentials/credentials.json
       
       - name: Executar sincronização
         env:
@@ -41,7 +41,7 @@ jobs:
       - name: Limpar credenciais
         if: always()
         run: |
-          rm -rf credentials/
+          rm -rf ../credentials/
 ```
 
 ---
@@ -69,4 +69,4 @@ DIA 2 EM DIANTE:
 
 QUANDO ADICIONAR DADOS NO SHEETS:
 ├─ Opção 1: Esperar até 3h (automático)
-└─ Opção 2: Rodar sync_sheets.py manualmente
+└─ Opção 2: Rodar ../src/sync_sheets.py manualmente

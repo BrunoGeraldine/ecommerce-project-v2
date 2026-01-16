@@ -24,7 +24,8 @@ import random
 from typing import List, Dict, Tuple
 
 # Setup
-ROOT_DIR = Path(__file__).parent.parent
+#ROOT_DIR = Path(__file__).parent.parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR))
 load_dotenv(ROOT_DIR / '.env')
 
@@ -35,6 +36,8 @@ scope = [
     'https://spreadsheets.google.com/feeds',
     'https://www.googleapis.com/auth/drive'
 ]
+print("ROOT_DIR:", ROOT_DIR)
+print("CREDENTIALS_PATH:", CREDENTIALS_PATH)
 
 if not CREDENTIALS_PATH.exists():
     print(f"❌ Erro: Arquivo {CREDENTIALS_PATH} não encontrado!")
@@ -99,7 +102,7 @@ def gerar_id_venda() -> str:
     """Gera um ID único para venda"""
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
     random_suffix = random.randint(1000, 9999)
-    return f"vnd_{timestamp}_{random_suffix}"
+    return f"sal_{timestamp}_{random_suffix}"
 
 
 def formatar_data_br(data: datetime) -> str:

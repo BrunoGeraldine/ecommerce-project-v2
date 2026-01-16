@@ -1,0 +1,41 @@
+name: Generate Daily Sales
+
+on:
+  schedule:
+    # Gera vendas todo dia às 9h da manhã (UTC)
+    - cron: '0 9 * * *'
+  
+  workflow_dispatch:
+
+jobs:
+  generate-sales:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install gspread oauth2client python-dotenv
+      
+      - name: Create credentials
+        run: |
+          mkdir -p credentials
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > ../credentials/credentials.json
+      
+      - name: Generate sales
+        env:
+          SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
+        run: |
+          python generate_daily_sales.py
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf ../credentials/
