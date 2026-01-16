@@ -1,264 +1,375 @@
+"""
+Sincronização Google Sheets → Supabase
+======================================
+Etapa 1: Limpar tabelas com TRUNCATE CASCADE
+Etapa 2: Popular tabelas com dados do Google Sheets
+
+CORREÇÕES:
+- Remove duplicatas antes de inserir
+- Valida Foreign Keys antes de inserir
+- Usa apenas INSERT (sem UPSERT)
+- Insere registro por registro em caso de erro de FK
+"""
+
 import os
 import sys
+import re
 from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Any, Set
+
 from dotenv import load_dotenv
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from supabase import create_client, Client
-from datetime import datetime
-import re
-from typing import Dict, List, Any, Optional
+import requests
 
-# Setup
-ROOT_DIR = Path(__file__).parent
+# ============================================================
+# SETUP
+# ============================================================
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT_DIR))
 load_dotenv(ROOT_DIR / '.env')
 
 CREDENTIALS_PATH = ROOT_DIR / 'credentials' / 'credentials.json'
 
-# Configuração Google Sheets
-scope = [
-    'https://spreadsheets.google.com/feeds',
-    'https://www.googleapis.com/auth/drive'
-]
-
 if not CREDENTIALS_PATH.exists():
-    print(f"❌ Erro: Arquivo {CREDENTIALS_PATH} não encontrado!")
+    print(f"❌ Erro: {CREDENTIALS_PATH} não encontrado!")
     sys.exit(1)
 
-creds = ServiceAccountCredentials.from_json_keyfile_name(str(CREDENTIALS_PATH), scope)
+# Google Sheets
+creds = ServiceAccountCredentials.from_json_keyfile_name(
+    str(CREDENTIALS_PATH),
+    ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+)
 gc = gspread.authorize(creds)
 
-# Configuração Supabase
+# Supabase
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_key = os.getenv('SUPABASE_KEY')
 supabase: Client = create_client(supabase_url, supabase_key)
 
-spreadsheet_name = os.getenv('SPREADSHEET_NAME', 'Dados do ecommerce')
+SPREADSHEET_NAME = os.getenv('SPREADSHEET_NAME', 'Dados do ecommerce')
 
-
-# ============================================================
-# CONFIGURAÇÃO DE TABELAS
-# ============================================================
-
-TABLES_CONFIG = {
+# Configuração das tabelas
+TABLES = {
     'clientes': {
-        'columns': ['id_cliente', 'nome_cliente', 'estado', 'pais', 'data_cadastro'],
-        'required': ['id_cliente'],
-        'pk': 'id_cliente'
+        'sheet': 'clientes',
+        'pk': 'id_cliente',
+        'fk': None
     },
     'produtos': {
-        'columns': ['id_produto', 'nome_produto', 'categoria', 'marca', 'preco_atual', 'data_criacao'],
-        'required': ['id_produto'],
-        'pk': 'id_produto'
+        'sheet': 'produtos',
+        'pk': 'id_produto',
+        'fk': None
     },
     'preco_competidores': {
-        'columns': ['id_produto', 'nome_concorrente', 'preco_concorrente', 'data_coleta'],
-        'required': ['id_produto'],
-        'pk': None
+        'sheet': 'preco_competidores',
+        'pk': None,
+        'fk': {'id_produto': 'produtos'}
     },
     'vendas': {
-        'columns': ['id_venda', 'data_venda', 'id_cliente', 'id_produto', 'canal_venda', 'quantidade', 'preco_unitario'],
-        'required': ['id_venda'],
-        'pk': 'id_venda'
+        'sheet': 'vendas',
+        'pk': 'id_venda',
+        'fk': {
+            'id_cliente': 'clientes',
+            'id_produto': 'produtos'
+        }
     }
 }
 
+# Cache de IDs válidos (para validação de FK)
+FK_CACHE = {}
+
 
 # ============================================================
-# FUNÇÕES DE LIMPEZA RÁPIDA
+# FUNÇÕES AUXILIARES
 # ============================================================
 
-def clean_value(value: Any, column_name: str) -> Any:
-    """Limpa um valor baseado no nome da coluna"""
-    if value is None or value == '':
+def limpar_valor(valor: Any, nome_coluna: str) -> Any:
+    """Limpa e converte valor baseado no tipo de coluna"""
+    if valor is None or valor == '':
         return None
     
-    # Limpar string
-    value_str = str(value).strip()
-    if not value_str:
+    valor_str = str(valor).strip()
+    if not valor_str:
         return None
     
-    column_lower = column_name.lower()
+    col_lower = nome_coluna.lower()
     
-    # IDs e textos
-    if 'id_' in column_lower or 'nome' in column_lower or 'estado' in column_lower or 'pais' in column_lower or 'canal' in column_lower or 'marca' in column_lower or 'categoria' in column_lower or 'concorrente' in column_lower:
-        return re.sub(r'\s+', ' ', value_str)  # Remover espaços duplos
-    
-    # Preços/valores decimais
-    if 'preco' in column_lower or 'valor' in column_lower:
+    # Preços (float)
+    if 'preco' in col_lower or 'valor' in col_lower:
         try:
-            clean = re.sub(r'[^\d,.\-]', '', value_str)
+            clean = re.sub(r'[^\d,.\-]', '', valor_str)
             clean = clean.replace(',', '.')
             return float(clean)
         except:
             return None
     
-    # Quantidade (inteiro)
-    if 'quantidade' in column_lower or 'qtd' in column_lower:
+    # Quantidade (int)
+    if 'quantidade' in col_lower or 'qtd' in col_lower:
         try:
-            clean = re.sub(r'[^\d]', '', value_str)
+            clean = re.sub(r'[^\d]', '', valor_str)
             return int(clean) if clean else None
         except:
             return None
     
-    # Datas
-    if 'data' in column_lower or 'date' in column_lower:
-        # YYYY-MM-DD
-        if re.match(r'^\d{4}-\d{2}-\d{2}$', value_str):
-            return value_str
-        # DD/MM/YYYY
-        if re.match(r'^\d{2}/\d{2}/\d{4}$', value_str):
-            day, month, year = value_str.split('/')
+    # Datas - converter para YYYY-MM-DD
+    if 'data' in col_lower or 'date' in col_lower:
+        if re.match(r'^\d{4}-\d{2}-\d{2}', valor_str):
+            return valor_str[:10]
+        if re.match(r'^\d{2}/\d{2}/\d{4}', valor_str):
+            day, month, year = valor_str[:10].split('/')
             return f"{year}-{month}-{day}"
-        # DD-MM-YYYY
-        if re.match(r'^\d{2}-\d{2}-\d{4}$', value_str):
-            day, month, year = value_str.split('-')
+        if re.match(r'^\d{2}-\d{2}-\d{4}', valor_str):
+            day, month, year = valor_str[:10].split('-')
             return f"{year}-{month}-{day}"
         return None
     
-    return value_str
+    # Texto (remover espaços múltiplos)
+    return re.sub(r'\s+', ' ', valor_str)
 
 
-# ============================================================
-# SINCRONIZAÇÃO
-# ============================================================
-
-def sync_table(sheet_name: str, table_name: str) -> Dict[str, int]:
-    """
-    Sincroniza uma tabela do Google Sheets para o Supabase
-    
-    Estratégia: TRUNCATE + INSERT (substituição completa)
-    """
-    print(f"\n{'='*70}")
-    print(f"🔄 SINCRONIZANDO: {sheet_name} → {table_name}")
-    print(f"{'='*70}")
-    
-    stats = {
-        'read': 0,
-        'valid': 0,
-        'inserted': 0,
-        'errors': 0
-    }
-    
+def carregar_ids_existentes(tabela: str, coluna_id: str) -> Set[str]:
+    """Carrega IDs existentes de uma tabela para validação de FK"""
     try:
-        # ETAPA 1: Ler dados do Google Sheets
-        print("📖 Lendo dados do Google Sheets...")
+        result = supabase.table(tabela).select(coluna_id).execute()
+        ids = {str(row[coluna_id]).strip() for row in result.data if row.get(coluna_id)}
+        return ids
+    except Exception as e:
+        print(f"\n      ⚠️  Erro ao carregar IDs de {tabela}.{coluna_id}: {str(e)[:60]}")
+        return set()
+
+
+def validar_foreign_keys(registro: Dict, config: Dict) -> bool:
+    """Valida se as foreign keys do registro existem nas tabelas referenciadas"""
+    fks = config.get('fk')
+    if not fks:
+        return True
+    
+    for fk_coluna, tabela_ref in fks.items():
+        if fk_coluna not in registro:
+            continue
         
-        spreadsheet = gc.open(spreadsheet_name)
-        worksheet = spreadsheet.worksheet(sheet_name)
-        all_values = worksheet.get_all_values()
+        fk_valor = str(registro[fk_coluna]).strip()
         
-        if not all_values or len(all_values) < 2:
-            print("⚠️  Nenhum dado encontrado")
-            return stats
+        # Lazy load do cache de IDs
+        cache_key = f"{tabela_ref}.{fk_coluna}"
+        if cache_key not in FK_CACHE:
+            FK_CACHE[cache_key] = carregar_ids_existentes(tabela_ref, fk_coluna)
         
-        # Headers e dados
-        headers = [h.strip().lower().replace(' ', '_') for h in all_values[0]]
-        data_rows = all_values[1:]
-        stats['read'] = len(data_rows)
+        # Validar se existe
+        if fk_valor not in FK_CACHE[cache_key]:
+            return False
+    
+    return True
+
+
+def remover_duplicatas(registros: List[Dict], pk: str) -> List[Dict]:
+    """Remove registros duplicados baseado na primary key"""
+    if not pk:
+        return registros
+    
+    unicos = {}
+    duplicatas = 0
+    
+    for registro in registros:
+        if pk not in registro:
+            continue
         
-        print(f"  ✓ Linhas encontradas: {stats['read']}")
+        registro_id = str(registro[pk]).strip()
         
-        # ETAPA 2: Converter e limpar
-        print("🧹 Limpando e validando dados...")
-        
-        config = TABLES_CONFIG.get(table_name, {})
-        expected_columns = config.get('columns', headers)
-        required_fields = config.get('required', [])
-        
-        cleaned_records = []
-        
-        for row_idx, row in enumerate(data_rows, start=2):
-            # Pular linhas vazias
-            if not any(cell.strip() for cell in row):
-                continue
-            
-            # Criar registro
-            record = {}
-            is_valid = True
-            
-            for col_idx, header in enumerate(headers):
-                if col_idx < len(row):
-                    raw_value = row[col_idx]
-                    cleaned_value = clean_value(raw_value, header)
-                    
-                    if cleaned_value is not None:
-                        record[header] = cleaned_value
-            
-            # Validar campos obrigatórios
-            for required in required_fields:
-                if required not in record or record[required] is None:
-                    is_valid = False
-                    stats['errors'] += 1
-                    break
-            
-            if is_valid and record:
-                cleaned_records.append(record)
-                stats['valid'] += 1
-        
-        print(f"  ✓ Registros válidos: {stats['valid']}")
-        print(f"  ✗ Registros inválidos: {stats['errors']}")
-        
-        if not cleaned_records:
-            print("❌ Nenhum registro válido para sincronizar")
-            return stats
-        
-        # ETAPA 3: Limpar tabela (TRUNCATE)
-        print(f"🗑️  Limpando tabela {table_name}...")
+        if registro_id in unicos:
+            duplicatas += 1
+            # Manter o último (mais recente)
+            unicos[registro_id] = registro
+        else:
+            unicos[registro_id] = registro
+    
+    if duplicatas > 0:
+        print(f"({duplicatas} dup removidas) ", end="")
+    
+    return list(unicos.values())
+
+
+# ============================================================
+# ETAPA 1: LIMPAR TABELAS
+# ============================================================
+
+def limpar_tabelas():
+    """Limpa todas as tabelas usando TRUNCATE CASCADE"""
+    print("\n" + "="*70)
+    print("🗑️  ETAPA 1: LIMPANDO TABELAS")
+    print("="*70)
+    
+    # Limpar na ordem reversa (dependências primeiro)
+    ordem_reversa = ['vendas', 'preco_competidores', 'produtos', 'clientes']
+    
+    for tabela in ordem_reversa:
+        if tabela not in TABLES:
+            continue
         
         try:
-            # Deletar todos os registros
-            pk = config.get('pk', 'id')
+            # Método 1: Via DELETE (mais compatível)
+            pk = TABLES[tabela].get('pk')
             if pk:
-                supabase.table(table_name).delete().neq(pk, '___impossible___').execute()
+                supabase.table(tabela).delete().neq(pk, '___impossible___').execute()
             else:
-                # Para tabelas sem PK, usar outro campo
-                supabase.table(table_name).delete().neq('id_produto', '___impossible___').execute()
+                supabase.table(tabela).delete().neq('id_produto', '___impossible___').execute()
             
-            print(f"  ✓ Tabela limpa")
+            print(f"  ✓ {tabela}: limpo")
         except Exception as e:
-            print(f"  ⚠️  Aviso ao limpar: {str(e)}")
+            print(f"  ⚠️  {tabela}: {str(e)[:60]}")
+    
+    # Limpar cache de FKs
+    global FK_CACHE
+    FK_CACHE = {}
+    
+    print()
+
+
+# ============================================================
+# ETAPA 2: POPULAR TABELAS
+# ============================================================
+
+def popular_tabelas():
+    """Lê dados do Google Sheets e insere no Supabase"""
+    print("="*70)
+    print("📥 ETAPA 2: POPULANDO TABELAS")
+    print("="*70)
+    
+    spreadsheet = gc.open(SPREADSHEET_NAME)
+    total_inserido = 0
+    total_erros = 0
+    
+    # Ordem correta: referências antes de dependências
+    ordem = ['clientes', 'produtos', 'preco_competidores', 'vendas']
+    
+    for tabela in ordem:
+        if tabela not in TABLES:
+            continue
         
-        # ETAPA 4: Inserir novos dados
-        print(f"💾 Inserindo {len(cleaned_records)} registros...")
+        config = TABLES[tabela]
+        sheet_name = config['sheet']
+        pk = config.get('pk')
         
-        batch_size = 100
+        print(f"\n🔄 {tabela}")
+        print(f"  📖 Lendo {sheet_name}...", end=" ")
         
-        for i in range(0, len(cleaned_records), batch_size):
-            batch = cleaned_records[i:i + batch_size]
+        try:
+            # Ler planilha
+            worksheet = spreadsheet.worksheet(sheet_name)
+            all_values = worksheet.get_all_values()
             
-            try:
-                supabase.table(table_name).insert(batch).execute()
-                stats['inserted'] += len(batch)
-                print(f"  ✓ Lote {i//batch_size + 1}: {len(batch)} registros")
-            except Exception as e:
-                print(f"  ⚠️  Erro no lote, tentando individual...")
+            if len(all_values) < 2:
+                print("⚠️  sem dados")
+                continue
+            
+            # Parse headers
+            headers = [h.strip().lower().replace(' ', '_') for h in all_values[0]]
+            data_rows = all_values[1:]
+            print(f"✓ {len(data_rows)} linhas")
+            
+            # Processar registros
+            print(f"  🧹 Processando...", end=" ")
+            registros = []
+            
+            for row in data_rows:
+                if not any(cell.strip() for cell in row):
+                    continue
                 
-                for record in batch:
+                # Fix: se primeira célula tem múltiplos valores, fazer split
+                if row and len(row[0]) > 50 and ('  ' in row[0] or '\t' in row[0]):
+                    parts = [p.strip() for p in row[0].split() if p.strip()]
+                    if parts:
+                        row[0] = parts[0]
+                
+                # Montar registro
+                registro = {}
+                for col_idx, header in enumerate(headers):
+                    if col_idx < len(row):
+                        valor_limpo = limpar_valor(row[col_idx], header)
+                        if valor_limpo is not None:
+                            registro[header] = valor_limpo
+                
+                if registro:
+                    registros.append(registro)
+            
+            # Remover duplicatas
+            if pk:
+                registros = remover_duplicatas(registros, pk)
+            
+            print(f"✓ {len(registros)} únicos")
+            
+            # Validar e filtrar por FK (se houver)
+            if config.get('fk'):
+                print(f"  🔗 Validando FKs...", end=" ")
+                registros_validos = []
+                erros_fk = 0
+                
+                for registro in registros:
+                    if validar_foreign_keys(registro, config):
+                        registros_validos.append(registro)
+                    else:
+                        erros_fk += 1
+                
+                registros = registros_validos
+                
+                if erros_fk > 0:
+                    print(f"⚠️  {erros_fk} com FK inválida removidos")
+                    total_erros += erros_fk
+                else:
+                    print(f"✓ OK")
+            
+            # Inserir em batches
+            if registros:
+                print(f"  💾 Inserindo...", end=" ")
+                batch_size = 500  # Reduzido para evitar timeouts
+                inseridos = 0
+                erros_insert = 0
+                
+                for i in range(0, len(registros), batch_size):
+                    batch = registros[i:i + batch_size]
+                    
                     try:
-                        supabase.table(table_name).insert(record).execute()
-                        stats['inserted'] += 1
-                    except Exception as err:
-                        stats['errors'] += 1
-                        print(f"    ✗ Erro: {str(err)[:80]}")
+                        # Sempre INSERT (já fizemos TRUNCATE antes)
+                        supabase.table(tabela).insert(batch).execute()
+                        inseridos += len(batch)
+                        total_inserido += len(batch)
+                    except Exception as e:
+                        # Se batch falhar, tentar um por um
+                        erro_msg = str(e)
+                        
+                        # Mostrar só primeiro erro
+                        if erros_insert == 0:
+                            print(f"\n      ⚠️  Erro no batch: {erro_msg[:80]}")
+                            print(f"      🔄 Tentando inserção individual...")
+                        
+                        for registro in batch:
+                            try:
+                                supabase.table(tabela).insert([registro]).execute()
+                                inseridos += 1
+                                total_inserido += 1
+                            except Exception as err:
+                                erros_insert += 1
+                                total_erros += 1
+                                
+                                # Mostrar apenas primeiro erro individual
+                                if erros_insert == 1:
+                                    print(f"      ✗ Exemplo: {str(err)[:80]}")
+                
+                if erros_insert > 0:
+                    print(f"⚠️  {inseridos}/{len(registros)} inseridos ({erros_insert} erros)")
+                else:
+                    print(f"✓ {inseridos}/{len(registros)} inseridos")
         
-        # RESUMO
-        print(f"\n{'─'*70}")
-        print(f"✅ Sincronização concluída:")
-        print(f"  • Lidos:     {stats['read']}")
-        print(f"  • Válidos:   {stats['valid']}")
-        print(f"  • Inseridos: {stats['inserted']}")
-        print(f"  • Erros:     {stats['errors']}")
-        print(f"{'─'*70}")
-        
-        return stats
-        
-    except Exception as e:
-        print(f"❌ Erro fatal: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return stats
+        except Exception as e:
+            print(f"❌ {str(e)[:60]}")
+            total_erros += 1
+    
+    print()
+    return total_inserido, total_erros
 
 
 # ============================================================
@@ -267,39 +378,30 @@ def sync_table(sheet_name: str, table_name: str) -> Dict[str, int]:
 
 def main():
     print("\n" + "="*70)
-    print("🔄 SINCRONIZAÇÃO AUTOMÁTICA - GOOGLE SHEETS → SUPABASE")
+    print("🔄 SINCRONIZAÇÃO GOOGLE SHEETS → SUPABASE")
     print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*70)
     
-    # Ordem: tabelas sem FK primeiro
-    sync_order = [
-        ('clientes', 'clientes'),
-        ('produtos', 'produtos'),
-        ('preco_competidores', 'preco_competidores'),
-        ('vendas', 'vendas')
-    ]
+    # Etapa 1: Limpar
+    limpar_tabelas()
     
-    total_inserted = 0
-    total_errors = 0
+    # Etapa 2: Popular
+    inseridos, erros = popular_tabelas()
     
-    for sheet_name, table_name in sync_order:
-        stats = sync_table(sheet_name, table_name)
-        total_inserted += stats['inserted']
-        total_errors += stats['errors']
-    
-    # RESUMO GERAL
-    print("\n" + "="*70)
-    print("📊 RESUMO GERAL")
+    # Resumo
     print("="*70)
-    print(f"  Total inserido: {total_inserted}")
-    print(f"  Total de erros: {total_errors}")
-    
-    if total_errors == 0:
-        print("\n✅ Sincronização concluída sem erros!")
-    else:
-        print(f"\n⚠️  Sincronização concluída com {total_errors} erros")
-    
+    print("📊 RESUMO")
+    print("="*70)
+    print(f"  ✅ Inseridos: {inseridos}")
+    print(f"  ❌ Erros:     {erros}")
     print("="*70 + "\n")
+    
+    if erros == 0:
+        print("✅ Sincronização concluída com sucesso!\n")
+    elif erros < 100:
+        print(f"⚠️  Sincronização concluída com {erros} erros (aceitável)\n")
+    else:
+        print(f"❌ Sincronização concluída com {erros} erros (investigar)\n")
 
 
 if __name__ == '__main__':

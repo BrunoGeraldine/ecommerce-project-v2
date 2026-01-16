@@ -4,8 +4,11 @@ Script Gerador de Vendas Diárias - Simulador de ERP
 
 - 500 vendas/dia
 - Inserção em pacotes de 100
-- Preços sempre no formato "238.99"
+- Preços como valores NUMÉRICOS (float) para Supabase
 - Datas no formato "YYYY-MM-DD HH:MM:SS"
+- Preço de competidores: 1 linha por dia por concorrente
+- id_cliente e id_produto respeitam dados existentes
+- canal_venda apenas "Loja Física" ou "Ecommerce"
 """
 
 import os
@@ -55,12 +58,7 @@ BATCH_SIZE = 100
 HORARIO_INICIO = 8
 HORARIO_FIM = 23
 
-CANAIS_VENDA = [
-    ("Site", 0.45),
-    ("App Mobile", 0.30),
-    ("Marketplace", 0.20),
-    ("Loja Física", 0.05),
-]
+CANAIS_VALIDOS = ["loja_fisica", "ecommerce"]
 
 COMPETIDORES = [
     "Mercado Livre",
@@ -76,8 +74,7 @@ COMPETIDORES = [
 # ============================================================
 
 def escolher_canal() -> str:
-    canais, pesos = zip(*CANAIS_VENDA)
-    return random.choices(canais, weights=pesos)[0]
+    return random.choice(CANAIS_VALIDOS)
 
 
 def gerar_id_venda() -> str:
@@ -113,6 +110,7 @@ def carregar_clientes() -> List[Dict]:
     try:
         return gc.open(SPREADSHEET_NAME).worksheet("clientes").get_all_records()
     except Exception:
+        # fallback com IDs fictícios
         return [
             {"id_cliente": "cli_001"},
             {"id_cliente": "cli_002"},
@@ -124,6 +122,7 @@ def carregar_produtos() -> List[Dict]:
     try:
         return gc.open(SPREADSHEET_NAME).worksheet("produtos").get_all_records()
     except Exception:
+        # fallback com produtos fictícios
         return [
             {"id_produto": "prd_001", "preco_atual": 3500.00},
             {"id_produto": "prd_002", "preco_atual": 89.90},
@@ -131,7 +130,7 @@ def carregar_produtos() -> List[Dict]:
         ]
 
 # ============================================================
-# GERAÇÃO + INSERÇÃO EM BATCH
+# GERAÇÃO + INSERÇÃO DE VENDAS (BATCHES)
 # ============================================================
 
 def gerar_e_inserir_vendas():
@@ -145,7 +144,7 @@ def gerar_e_inserir_vendas():
     for batch_inicio in range(0, TOTAL_VENDAS_DIA, BATCH_SIZE):
         batch = []
 
-        for i in range(batch_inicio, batch_inicio + BATCH_SIZE):
+        for i in range(batch_inicio, min(batch_inicio + BATCH_SIZE, TOTAL_VENDAS_DIA)):
             produto = random.choice(produtos)
             cliente = random.choice(clientes)
 
@@ -159,32 +158,35 @@ def gerar_e_inserir_vendas():
                 gerar_preco_numerico(float(produto["preco_atual"]), 0.05),
             ])
 
-        worksheet.append_rows(batch)
-        print(f"✅ Inserido lote de vendas {batch_inicio + 1}–{batch_inicio + BATCH_SIZE}")
+        worksheet.append_rows(batch, value_input_option="RAW")
+        print(f"✅ Inserido lote de vendas {batch_inicio + 1}–{min(batch_inicio + BATCH_SIZE, TOTAL_VENDAS_DIA)}")
         time.sleep(2)
 
 # ============================================================
-# PREÇOS DE COMPETIDORES
+# PREÇOS DE COMPETIDORES (1 POR DIA / CONCORRENTE)
 # ============================================================
 
 def gerar_e_inserir_precos_competidores():
     produtos = carregar_produtos()
     worksheet = gc.open(SPREADSHEET_NAME).worksheet("preco_competidores")
 
+    # Apenas 1 produto de referência para o dia
+    produto_referencia = random.choice(produtos)
+    base = float(produto_referencia["preco_atual"])
+    data_coleta = formatar_data_iso(datetime.now())
+
     linhas = []
 
-    for produto in produtos:
-        base = float(produto["preco_atual"])
-        for concorrente in random.sample(COMPETIDORES, random.randint(2, 4)):
-            linhas.append([
-                produto["id_produto"],
-                concorrente,
-                gerar_preco_numerico(base, 0.20),
-                formatar_data_iso(datetime.now()),
-            ])
+    for concorrente in COMPETIDORES:
+        linhas.append([
+            produto_referencia["id_produto"],
+            concorrente,
+            gerar_preco_numerico(base, 0.20),
+            data_coleta,
+        ])
 
-    worksheet.append_rows(linhas)
-    print(f"✅ Inseridos {len(linhas)} preços de competidores")
+    worksheet.append_rows(linhas, value_input_option="RAW")
+    print(f"✅ Inseridos {len(linhas)} preços diários de competidores")
 
 # ============================================================
 # MAIN
