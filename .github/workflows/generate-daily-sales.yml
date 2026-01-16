@@ -2,8 +2,12 @@ name: Generate Daily Sales
 
 on:
   schedule:
-    # Gera vendas todo dia às 9h da manhã (UTC)
-    - cron: '0 9 * * *'
+    # Roda todo dia às 3h da manhã (UTC)
+    - cron: '0 3 * * *'
+
+  #schedule:
+  #  # Gera vendas a cada 3 minutos
+  #  - cron: '*/3 * * * *' # 
   
   workflow_dispatch:
 
@@ -27,15 +31,15 @@ jobs:
       - name: Create credentials
         run: |
           mkdir -p credentials
-          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > ../credentials/credentials.json
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
       
       - name: Generate sales
         env:
           SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
         run: |
-          python generate_daily_sales.py
+          python src/generate_daily_sales.py
       
       - name: Cleanup
         if: always()
         run: |
-          rm -rf ../credentials/
+          rm -rf credentials/
