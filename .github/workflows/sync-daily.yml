@@ -1,10 +1,6 @@
 name: Daily Sync - Google Sheets to Supabase
 
 on:
-#  schedule:
-#    # Roda todo dia às 3h da manhã (UTC)
-#    - cron: '0 3 * * *'
-
   schedule:
   # Gera vendas a cada 3 minutos
   - cron: '*/3 * * * *' 
