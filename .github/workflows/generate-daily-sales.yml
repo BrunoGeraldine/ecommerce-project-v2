@@ -28,7 +28,21 @@ jobs:
         run: |
           pip install gspread oauth2client python-dotenv
       
+      - name: Create credentials directory
+        run: |
+          mkdir -p credentials
+      
+      - name: Create credentials file
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
+      
       - name: Generate sales
+        env:
+          SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
         run: |
           python src/generate_daily_sales.py
       
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf credentials/

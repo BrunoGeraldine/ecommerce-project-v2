@@ -29,7 +29,23 @@ jobs:
         run: |
           pip install gspread oauth2client supabase python-dotenv
       
-      - name: Executar sincronização
-        
+      - name: Create credentials directory
         run: |
-          python src/sync_sheets.py
+          mkdir -p credentials
+      
+      - name: Criar arquivo de credenciais
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials/credentials.json
+      
+      - name: Executar sincronização
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SPREADSHEET_NAME: ${{ secrets.SPREADSHEET_NAME }}
+        run: |
+          python src/validate_and_import.py
+      
+      - name: Limpar credenciais
+        if: always()
+        run: |
+          rm -rf credentials/
