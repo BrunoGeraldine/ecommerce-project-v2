@@ -1,110 +1,110 @@
-# Arquitetura - Projeto E-commerce v2
+# Architecture - E-commerce Project v2
 
-## 📋 Visão Geral
+## 📋 Overview
 
-Este projeto implementa um **pipeline ETL em 6 camadas** que sincroniza dados entre Google Sheets e Supabase (PostgreSQL), com geração contínua de vendas simuladas.
+This project implements a **6-layer ETL pipeline** that synchronizes data between Google Sheets and Supabase (PostgreSQL), with continuous generation of simulated sales.
 
-**ETL Principal**: `src/validate_and_import.py` (validação robusta em cada camada)
-**Gerador de Vendas**: `src/generate_daily_sales.py` (3 vendas/ciclo ≈ 864/dia)
+**Main ETL**: `src/validate_and_import.py` (robust validation at each layer)
+**Sales Generator**: `src/generate_daily_sales.py` (3 sales/cycle ≈ 864/day)
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## 🏗️ Project Structure
 
 ```
 ecommerce-project-v2/
 ├── 📁 .github/workflows/
-│   ├── sync-daily.yml             # Sincronização (5 min)
-│   └── generate-daily-sales.yml   # Geração de vendas (5 min)
+│   ├── sync-daily.yml             # Synchronization (3 min)
+│   └── generate-daily-sales.yml   # Sales generation (5 min)
 │
 ├── 📁 credentials/
 │   └── credentials.json           # Google Service Account (⚠️ gitignore)
 │
 ├── 📁 src/
-│   ├── validate_and_import.py     # 🚀 Setup de configuracao das tabelas (rodar uma vez apenas)
-│   ├── generate_daily_sales.py    # Gerador contínuo (3 vendas/ciclo, 222 linhas)
-│   └── sync_sheets.py             # 🚀 ETL Principal
+│   ├── validate_and_import.py     # 🚀 ETL Setup Configuration Tables (run once only)
+│   ├── generate_daily_sales.py    # Continuous Generator (3 sales/cycle, 222 lines)
+│   └── sync_sheets.py             # 🚀 Main ETL
 │
-├── test_connection.py             # Diagnóstico (58 linhas)
-├── create_tables.sql              # Schema PostgreSQL
-├── requirements.txt               # Dependências Python
-├── ARCHITECTURE.md                # Documentação técnica (este arquivo)
-├── README.md                      # Setup e primeiros passos
+├── test_connection.py             # Diagnostics (58 lines)
+├── create_tables.sql              # PostgreSQL Schema
+├── requirements.txt               # Python Dependencies
+├── ARCHITECTURE.md                # Technical Documentation (this file)
+├── README.md                      # Setup and Getting Started
 ├── .env                           # Config (⚠️ gitignore)
 └── .gitignore
 ```
 
 ---
 
-## 🔄 Pipeline ETL - 6 Camadas
+## 🔄 ETL Pipeline - 6 Layers
 
-### **Camada 1: SCHEMA** (Definição)
-- Define estrutura esperada por tabela
-- Linhas 41-112 em `validate_and_import.py`
+### **Layer 1: SCHEMA** (Definition)
+- Defines expected structure per table
+- Lines 41-112 in `validate_and_import.py`
 
-### **Camada 2: LIMPEZA** (Transform)
+### **Layer 2: CLEANING** (Transform)
 - `clean_text()`, `clean_decimal()`, `clean_integer()`, `clean_date()`
-- Linhas 115-223
+- Lines 115-223
 
-### **Camada 3: LEITURA SEGURA** (Extract)
-- `read_sheet_safe()` - Lê célula por célula
-- Linhas 225-285
+### **Layer 3: SAFE READING** (Extract)
+- `read_sheet_safe()` - Reads cell by cell
+- Lines 225-285
 
-### **Camada 4: VALIDAÇÃO DE REGISTROS** (Validate)
-- `validate_and_clean_row()` - Valida 1 registro
-- Linhas 287-372
+### **Layer 4: RECORD VALIDATION** (Validate)
+- `validate_and_clean_row()` - Validates 1 record
+- Lines 287-372
 
-### **Camada 5: VALIDAÇÃO FK** (Validate FK)
-- `validate_foreign_keys()` - Carrega IDs em cache
-- `load_existing_ids()` - Cache para performance
-- Linhas 374-441
+### **Layer 5: FK VALIDATION** (Validate FK)
+- `validate_foreign_keys()` - Loads IDs into cache
+- `load_existing_ids()` - Cache for performance
+- Lines 374-441
 
-### **Camada 6: IMPORTAÇÃO** (Load)
-- `import_with_validation()` - DELETE + INSERT em lotes
-- Retry individual se falhar
-- Linhas 443-603
+### **Layer 6: IMPORT** (Load)
+- `import_with_validation()` - DELETE + INSERT in batches
+- Retry individual if failed
+- Lines 443-603
 
 ---
 
-## 🚀 Scripts Principais
+## 🚀 Main Scripts
 
 ### 1. `src/validate_and_import.py` - ETL Setup 
-**Linhas**: 640 | **Quando usar**: Setup, debug, integridade
+**Lines**: 640 | **When to use**: Setup, debug, integrity
 
-**Comando**:
+**Command**:
 ```bash
 python src/validate_and_import.py
 ```
 
-**Performance**: 2-3 minutos (11.378+ registros)
+**Performance**: 2-3 minutes (11,378+ records)
 
 ---
 
-### 2. `src/generate_daily_sales.py` - Gerador ⚙️
-**Linhas**: 222 | **Quando usar**: Simular vendas contínuas
+### 2. `src/generate_daily_sales.py` - Generator ⚙️
+**Lines**: 222 | **When to use**: Simulate continuous sales
 
-**Características**:
-- 3 vendas/ciclo (≈ 864/dia)
-- IDs válidos do Supabase
-- Canal: loja_fisica ou ecommerce (50/50)
-- Preços: preco_atual ± 0-5%
+**Features**:
+- 3 sales/cycle (≈ 864/day)
+- Valid IDs from Supabase
+- Channel: loja_fisica or ecommerce (50/50)
+- Prices: preco_atual ± 0-5%
 
-**Comando**:
+**Command**:
 ```bash
 python src/generate_daily_sales.py
 ```
 
 ---
 
-### 3. `src/sync_sheets.py` - ⭐ ETL principal e sincronizacao dados
-**Linhas**: 408 | **Status**: Manutenção
+### 3. `src/sync_sheets.py` - ⭐ Main ETL and Data Synchronization
+**Lines**: 408 | **Status**: Maintenance
 
-2 etapas: TRUNCATE CASCADE + INSERT básico
+2 stages: TRUNCATE CASCADE + basic INSERT
 
 ---
 
-### 4. `test_connection.py` - Diagnóstico
-**Linhas**: 58 | **Propósito**: Verificar conectividade
+### 4. `test_connection.py` - Diagnostics
+**Lines**: 58 | **Purpose**: Check connectivity
 
 ```bash
 python test_connection.py
@@ -112,37 +112,37 @@ python test_connection.py
 
 ---
 
-## 🤖 Automação - GitHub Actions
+## 🤖 Automation - GitHub Actions
 
 ### Workflow 1: `sync-daily.yml`
-- Trigger: Cada 3 minutos
-- Executa: `sync_sheets.py`
-- Sincroniza clientes → produtos → precos → vendas
+- Trigger: Every 3 minutes
+- Executes: `sync_sheets.py`
+- Synchronizes clientes → productos → precos → vendas
 
 ### Workflow 2: `generate-daily-sales.yml`
-- Trigger: Cada 5 minutos
-- Executa: `generate_daily_sales.py`
+- Trigger: Every 5 minutes
+- Executes: `generate_daily_sales.py`
 
-**Segredos necessários**:
+**Required Secrets**:
 - `SUPABASE_URL`
 - `SUPABASE_KEY`
 - `SPREADSHEET_NAME`
-- `GOOGLE_CREDENTIALS` (credentials.json em base64)
+- `GOOGLE_CREDENTIALS` (credentials.json in base64)
 
 ---
 
-## 📊 Modelo de Dados
+## 📊 Data Model
 
-4 tabelas com FKs:
+4 tables with FKs:
 
-| Tabela | Tipo | PK | FKs |
-|--------|------|----|----|
-| clientes | Mestres | id_cliente | - |
-| produtos | Mestres | id_produto | - |
-| preco_competidores | Transacional | - | id_produto |
-| vendas | Transacional | id_venda | id_cliente, id_produto |
+| Table | Type | PK | FKs |
+|-------|------|----|----|
+| clientes | Masters | id_cliente | - |
+| produtos | Masters | id_produto | - |
+| preco_competidores | Transactional | - | id_produto |
+| vendas | Transactional | id_venda | id_cliente, id_produto |
 
-**Ordem de sincronização**:
+**Synchronization Order**:
 1. clientes
 2. produtos
 3. preco_competidores
@@ -150,139 +150,139 @@ python test_connection.py
 
 ---
 
-## 🔄 Tratamento de Erros & FK
+## 🔄 Error Handling & FK
 
-### Problema: Foreign Key Violations
+### Problem: Foreign Key Violations
 ```
-❌ Erro: insert or update violates foreign key constraint
-✓ 3013/4013 inseridos
-❌ Erros: 1000
+❌ Error: insert or update violates foreign key constraint
+✓ 3013/4013 inserted
+❌ Errors: 1000
 ```
 
-### Soluções Implementadas
+### Implemented Solutions
 
-#### 1. Validação FK ANTES de inserir (Camada 5)
+#### 1. FK Validation BEFORE Insert (Layer 5)
 ```python
 def validate_foreign_keys(cleaned_data, table_name):
-    """Carrega IDs em cache, valida cada FK"""
+    """Loads IDs into cache, validates each FK"""
     valid_ids = load_existing_ids('clientes', 'id_cliente')
-    # Filtrar registros com FKs válidas
+    # Filter records with valid FKs
     return valid_rows, fk_errors
 ```
 
-#### 2. Cache de IDs para Performance
+#### 2. ID Cache for Performance
 ```python
 def load_existing_ids(table_name, id_column):
-    """Carrega uma única vez em SET"""
+    """Loads once into SET"""
     response = supabase.table(table_name).select(id_column).execute()
     return {record[id_column] for record in response.data}
 ```
 
-#### 3. Limpeza de Dados (Camada 2)
-Remove espaços, caracteres invisíveis, normaliza.
+#### 3. Data Cleaning (Layer 2)
+Removes spaces, invisible characters, normalizes.
 
-#### 4. Ordem Correta
-Tabelas mestres ANTES de transacionais.
+#### 4. Correct Order
+Master tables BEFORE transactional.
 
-#### 5. Retry Individual
-Se batch falhar: tenta 1 por 1.
+#### 5. Individual Retry
+If batch fails: tries 1 by 1.
 
-### Resultado Esperado
+### Expected Result
 ```
-✓ 4013 linhas lidas
-✓ 4013 com FKs válidas
-✓ 4013/4013 inseridos
-❌ Erros: 0
+✓ 4013 rows read
+✓ 4013 with valid FKs
+✓ 4013/4013 inserted
+❌ Errors: 0
 ```
 
 ---
 
 ## 📊 Performance & Benchmarks
 
-Com 11.378+ registros (4 tabelas):
+With 11,378+ records (4 tables):
 
-| Operação | Registros | Tempo |
-|----------|-----------|-------|
-| Leitura Google Sheets | 11.378 | 45-60 seg |
-| Validação & Limpeza | 11.378 | 30-45 seg |
-| Validação FK (cache) | 11.378 | 20-30 seg |
-| DELETE tabelas | - | < 5 seg |
-| INSERT em lotes (50) | 11.378 | 60-90 seg |
-| **TOTAL** | **11.378** | **2-3 min** |
+| Operation | Records | Time |
+|-----------|---------|------|
+| Google Sheets Reading | 11,378 | 45-60 sec |
+| Validation & Cleaning | 11,378 | 30-45 sec |
+| FK Validation (cache) | 11,378 | 20-30 sec |
+| DELETE tables | - | < 5 sec |
+| INSERT in batches (50) | 11,378 | 60-90 sec |
+| **TOTAL** | **11,378** | **2-3 min** |
 
-**Dicas**:
-- ❌ Aumentar batch > 50 (timeout)
-- ✅ Boa conexão de rede
-- ✅ Evitar 2 scripts simultâneos
-
----
-
-## 🎯 Padrões de Design
-
-1. **6 Camadas Independentes** - Cada uma com responsabilidade única
-2. **Validação Progressiva** - Filtrar dados "ruins" cedo
-3. **Idempotência** - Executar múltiplas vezes = mesmo resultado
-4. **Logging Detalhado** - Contexto em cada erro
-5. **Graceful Degradation** - Erros não interrompem sync
-6. **Cache para Performance** - IDs de FK carregados uma única vez
+**Tips**:
+- ❌ Increase batch > 50 (timeout)
+- ✅ Good network connection
+- ✅ Avoid 2 scripts simultaneously
 
 ---
 
-## 🚨 Monitoramento & Logs
+## 🎯 Design Patterns
 
-**Sucesso**:
+1. **6 Independent Layers** - Each with single responsibility
+2. **Progressive Validation** - Filter "bad" data early
+3. **Idempotence** - Run multiple times = same result
+4. **Detailed Logging** - Context in each error
+5. **Graceful Degradation** - Errors don't stop sync
+6. **Cache for Performance** - FK IDs loaded once
+
+---
+
+## 🚨 Monitoring & Logs
+
+**Success**:
 ```
-✅ IMPORTAÇÃO CONCLUÍDA
-  Total inserido: 4013
-  Erros: 0
+✅ IMPORT COMPLETED
+  Total inserted: 4013
+  Errors: 0
 ```
 
-**Problema**:
+**Problem**:
 ```
-❌ ERRO: Foreign key constraint violated
-✓ 3013/4013 inseridos
-❌ Erros: 1000
+❌ ERROR: Foreign key constraint violated
+✓ 3013/4013 inserted
+❌ Errors: 1000
 ```
 
 **Debug**:
 1. `python test_connection.py`
 2. `python src/validate_and_import.py`
-3. Verificar Google Sheets (dados duplicados?)
-4. Verificar Supabase Dashboard
+3. Check Google Sheets (duplicate data?)
+4. Check Supabase Dashboard
 
 ---
 
 ## 🔍 Troubleshooting
 
 ### "FileNotFoundError: credentials.json"
-→ Coloque em `credentials/credentials.json`
+→ Place in `credentials/credentials.json`
 
 ### "SUPABASE_URL not found"
-→ Crie `.env` com variáveis
+→ Create `.env` with variables
 
 ### "Foreign key constraint violated"
-→ Sincronizar na ordem correta: clientes → produtos → preco → vendas
+→ Synchronize in correct order: clientes → produtos → preco → vendas
 
 ### "Spreadsheet not found"
-→ Confirmar nome exato em `.env` (case-sensitive)
-→ Compartilhar sheet com Service Account email
+→ Confirm exact name in `.env` (case-sensitive)
+→ Share sheet with Service Account email
 
-### "Script demora > 5 min"
-→ Verificar conexão, quota API (120 req/min)
+### "Script takes > 5 min"
+→ Check connection, API quota (120 req/min)
 
-### "Muitos erros de validação"
-→ Verificar tipos de dados no Google Sheets (datas, decimais, IDs)
+### "Many validation errors"
+→ Check data types in Google Sheets (dates, decimals, IDs)
 
 ---
 
-## 🔐 Segurança
+## 🔐 Security
 
-⚠️ **NUNCA commitar**:
-- `credentials.json` (chaves Google)
-- `.env` (chaves Supabase)
-- Tokens/credenciais
+⚠️ **NEVER commit**:
+- `credentials.json` (Google keys)
+- `.env` (Supabase keys)
+- Tokens/credentials
 
-Verificar `.gitignore`:
+Check `.gitignore`:
 ```
 credentials.json
 .env
@@ -293,20 +293,20 @@ venv/
 
 ---
 
-## 📚 Documentação & Links
+## 📚 Documentation & Links
 
-- **README.md**: Quick-start e primeiros passos
-- **create_tables.sql**: Schema PostgreSQL completo
-- **requirements.txt**: Dependências com versões
+- **README.md**: Quick-start and getting started
+- **create_tables.sql**: Complete PostgreSQL schema
+- **requirements.txt**: Dependencies with versions
 
-### Referências Externas
+### External References
 - [Google Cloud Console](https://console.cloud.google.com) - Service Account
-- [Supabase Dashboard](https://supabase.com/dashboard) - Banco de dados
+- [Supabase Dashboard](https://supabase.com/dashboard) - Database
 - [gspread Docs](https://docs.gspread.org) - Google Sheets API Python
 - [Supabase Python SDK](https://supabase.com/docs/reference/python)
 - [PostgreSQL Docs](https://www.postgresql.org/docs/)
 
 ---
 
-**Última atualização**: Janeiro 2026  
-**Versão**: 3.1 (6 Camadas ETL com validate_and_import.py)
+**Last Update**: January 2026  
+**Version**: 3.1 (6 Layer ETL with validate_and_import.py)

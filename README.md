@@ -1,75 +1,75 @@
-# Projeto E-commerce v2 - ETL Google Sheets → Supabase
+# E-commerce Project v2 - ETL Google Sheets → Supabase
 
-## 📊 Resumo Executivo
+## 📊 Executive Summary
 
-Pipeline ETL em **6 camadas** que sincroniza dados entre Google Sheets e Supabase com validação robusta em cada etapa.
+6-layer ETL pipeline that synchronizes data between Google Sheets and Supabase with robust validation at each step.
 
 **Stack**:
-- 🚀 **ETL Principal**: `src/validate_and_import.py` (6 camadas, 640 linhas)
-- ⚙️ **Gerador**: `src/generate_daily_sales.py` (3 vendas/ciclo, 222 linhas)
-- 🤖 **Automação**: GitHub Actions (a cada 5 minutos)
+- 🚀 **Main ETL**: `src/validate_and_import.py` (6 layers, 640 lines)
+- ⚙️ **Generator**: `src/generate_daily_sales.py` (3 sales/cycle, 222 lines)
+- 🤖 **Automation**: GitHub Actions (every 5 minutes)
 - 🗄️ **Database**: Supabase (PostgreSQL)
-- 📊 **Fonte**: Google Sheets
+- 📊 **Source**: Google Sheets
 
 ---
 
-## 🏗️ Estrutura do Projeto
+## 🏗️ Project Structure
 
 ```
 ecommerce-project-v2/
 ├── 📁 .github/workflows/
-│   ├── sync-daily.yml             # Sincronização (5 min)
-│   └── generate-daily-sales.yml   # Geração de vendas (5 min)
+│   ├── sync-daily.yml             # Synchronization (5 min)
+│   └── generate-daily-sales.yml   # Sales generation (5 min)
 │
 ├── 📁 credentials/
 │   └── credentials.json           # Google Service Account (⚠️ gitignore)
 │
 ├── 📁 src/
-│   ├── validate_and_import.py     # 🚀 Setup de configuracao das tabelas (rodar uma vez apenas)
-│   ├── generate_daily_sales.py    # Gerador contínuo (3 vendas/ciclo, 222 linhas)
-│   └── sync_sheets.py             # 🚀 ETL Principal
+│   ├── validate_and_import.py     # 🚀 ETL Setup Configuration Tables (run once only)
+│   ├── generate_daily_sales.py    # Continuous generator (3 sales/cycle, 222 lines)
+│   └── sync_sheets.py             # 🚀 Main ETL
 │
-├── test_connection.py             # Diagnóstico (58 linhas)
-├── create_tables.sql              # Schema PostgreSQL
-├── requirements.txt               # Dependências Python
-├── ARCHITECTURE.md                # Documentação técnica (este arquivo)
-├── README.md                      # Setup e primeiros passos
+├── test_connection.py             # Diagnostics (58 lines)
+├── create_tables.sql              # PostgreSQL Schema
+├── requirements.txt               # Python Dependencies
+├── ARCHITECTURE.md                # Technical Documentation
+├── README.md                      # Setup and Getting Started
 ├── .env                           # Config (⚠️ gitignore)
 └── .gitignore
 ```
 
 ---
 
-## 🚀 Primeiros Passos (Setup em 5 passos)
+## 🚀 Getting Started (5 Steps)
 
-### 1️⃣ Clonar repositório
+### 1️⃣ Clone Repository
 ```bash
-git clone <seu-repo>
+git clone <your-repo>
 cd ecommerce-project-v2
 ```
 
-### 2️⃣ Instalar dependências Python
+### 2️⃣ Install Python Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3️⃣ Configurar Google Sheets (OAuth2 Service Account)
+### 3️⃣ Configure Google Sheets (OAuth2 Service Account)
 
-**No Google Cloud Console**:
-1. Criar novo projeto
-2. Ativar APIs: "Google Sheets API" + "Google Drive API"
-3. Criar "Service Account"
-4. Gerar chave JSON
-5. Baixar para `credentials/credentials.json`
-6. **Compartilhar** Google Sheets com email do Service Account (`seu-sa@seu-projeto.iam.gserviceaccount.com`)
+**In Google Cloud Console**:
+1. Create new project
+2. Enable APIs: "Google Sheets API" + "Google Drive API"
+3. Create "Service Account"
+4. Generate JSON key
+5. Download to `credentials/credentials.json`
+6. **Share** Google Sheets with Service Account email (`seu-sa@seu-projeto.iam.gserviceaccount.com`)
 
-**Arquivo esperado**: `credentials/credentials.json`
+**Expected File**: `credentials/credentials.json`
 
-### 4️⃣ Configurar Supabase
+### 4️⃣ Configure Supabase
 
-1. Criar projeto em [supabase.com](https://supabase.com)
-2. Copiar `SUPABASE_URL` e `SUPABASE_KEY` (anon-key)
-3. Criar arquivo `.env` na raiz:
+1. Create project at [supabase.com](https://supabase.com)
+2. Copy `SUPABASE_URL` and `SUPABASE_KEY` (anon-key)
+3. Create `.env` file in root:
 
 ```env
 SUPABASE_URL=https://seu-projeto.supabase.co
@@ -77,95 +77,95 @@ SUPABASE_KEY=seu-anon-key-aqui
 SPREADSHEET_NAME=Dados do ecommerce
 ```
 
-### 5️⃣ Setup inicial do banco
+### 5️⃣ Initialize Database
 
 ```bash
-# 1. Testar conexão
+# 1. Test connection
 python test_connection.py
-# Output esperado: ✅ Google Sheets conectado, ✅ Supabase conectado
+# Expected output: ✅ Google Sheets connected, ✅ Supabase connected
 
-# 2. Criar tabelas (via Supabase Dashboard ou rodar create_tables.sql)
-# 3. Popular dados iniciais
+# 2. Create tables (via Supabase Dashboard or run create_tables.sql)
+# 3. Populate initial data
 python src/validate_and_import.py
 ```
 
 ---
 
-## 📋 Como Usar
+## 📋 How to Use
 
-### Para Importação Inicial (Setup)
+### For Initial Import (Setup)
 ```bash
 python src/validate_and_import.py
 ```
-✅ Valida dados em **6 camadas** antes de inserir  
-✅ Mostra erros **linha por linha** (número da linha, campo, valor esperado)  
-✅ Ideal para debug e troubleshooting
+✅ Validates data in **6 layers** before inserting  
+✅ Shows errors **line by line** (line number, field, expected value)  
+✅ Ideal for debugging and troubleshooting
 
-### Para Sincronização Contínua
-Automático via GitHub Actions a cada **5 minutos**:
-- `generate_daily_sales.py` → Insere vendas no Sheets
-- `sync_sheets.py` → Sincroniza com Supabase
+### For Continuous Synchronization
+Automatic via GitHub Actions every **5 minutes**:
+- `generate_daily_sales.py` → Inserts sales into Sheets
+- `sync_sheets.py` → Synchronizes with Supabase
 
-### Para Gerar Novas Vendas Manualmente
+### To Generate New Sales Manually
 ```bash
 python src/generate_daily_sales.py
 ```
-Insere 3 novas vendas no Google Sheets (simula ERP)
+Inserts 3 new sales into Google Sheets (simulates ERP)
 
-### Para Diagnóstico
+### For Diagnostics
 ```bash
 python test_connection.py
 ```
-Verifica conectividade Google Sheets + Supabase
+Check Google Sheets + Supabase connectivity
 
 ---
 
-## 🔍 O que Acontece a Cada Execução de `validate_and_import.py`
+## 🔍 What Happens on Each Execution of `validate_and_import.py`
 
 ```
-📖 Camada 1: LER
-   └─ Lê Google Sheets célula por célula (evita concatenação)
+📖 Layer 1: READ
+   └─ Reads Google Sheets cell by cell (avoids concatenation)
 
-🧹 Camadas 2-4: VALIDAR & LIMPAR
-   ├─ Normaliza tipos (text, decimal, int, date)
-   ├─ Valida campos obrigatórios
-   ├─ Remove espaços e caracteres inválidos
-   └─ Gera lista de registros válidos + erros
+🧹 Layers 2-4: VALIDATE & CLEAN
+   ├─ Normalizes types (text, decimal, int, date)
+   ├─ Validates required fields
+   ├─ Removes spaces and invalid characters
+   └─ Generates list of valid records + errors
 
-🔗 Camada 5: VALIDAR FOREIGN KEYS
-   ├─ Carrega IDs existentes em cache
-   ├─ Valida cada FK (id_cliente em clientes?, id_produto em produtos?)
-   └─ Remove registros com FKs inválidas
+🔗 Layer 5: VALIDATE FOREIGN KEYS
+   ├─ Loads existing IDs into cache
+   ├─ Validates each FK (id_cliente in clientes?, id_produto in produtos?)
+   └─ Removes records with invalid FKs
 
-💾 Camada 6: IMPORTAR
-   ├─ Limpa tabelas (DELETE WHERE pk != '___impossible___')
-   ├─ Insere registros em lotes de 50
-   ├─ Se lote falhar: retry individual (1 por vez)
-   └─ Retorna: quantos inseridos, quantos erros
+💾 Layer 6: IMPORT
+   ├─ Cleans tables (DELETE WHERE pk != '___impossible___')
+   ├─ Inserts records in batches of 50
+   ├─ If batch fails: individual retry (1 at a time)
+   └─ Returns: how many inserted, how many errors
 
-📊 Resultado:
-   ✅ 250 inseridos
-   ❌ 0 erros
+📊 Result:
+   ✅ 250 inserted
+   ❌ 0 errors
 ```
 
 ---
 
-## 🔧 Configuração GitHub Actions
+## 🔧 GitHub Actions Configuration
 
-### Setup (uma vez no GitHub)
+### Setup (once on GitHub)
 
-1. Abrir repositório no GitHub
+1. Open repository on GitHub
 2. Settings → Secrets and variables → Actions
-3. Adicionar secrets:
+3. Add secrets:
 
-| Secret | Valor |
+| Secret | Value |
 |--------|-------|
 | `SUPABASE_URL` | `https://seu-projeto.supabase.co` |
-| `SUPABASE_KEY` | Sua anon-key |
-| `SPREADSHEET_NAME` | Nome exato da planilha |
-| `GOOGLE_CREDENTIALS` | credentials.json em base64 |
+| `SUPABASE_KEY` | Your anon-key |
+| `SPREADSHEET_NAME` | Exact spreadsheet name |
+| `GOOGLE_CREDENTIALS` | credentials.json in base64 |
 
-### Encodar credentials.json em base64
+### Encode credentials.json in Base64
 
 **Linux/Mac**:
 ```bash
@@ -177,77 +177,77 @@ base64 -i credentials/credentials.json
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("credentials/credentials.json")) | Set-Clipboard
 ```
 
-Depois colar como valor do secret `GOOGLE_CREDENTIALS` no GitHub.
+Then paste as value of `GOOGLE_CREDENTIALS` secret on GitHub.
 
 ---
 
-## 📊 Modelo de Dados
+## 📊 Data Model
 
-4 tabelas principais com relacionamentos:
+4 main tables with relationships:
 
-| Tabela | Tipo | PK | FKs | Descrição |
-|--------|------|----|----|-----------|
-| `clientes` | Mestres | id_cliente | - | Dados de clientes |
-| `produtos` | Mestres | id_produto | - | Catálogo de produtos |
-| `preco_competidores` | Transacional | - | id_produto → produtos | Preços de concorrentes |
-| `vendas` | Transacional | id_venda | id_cliente, id_produto | Histórico de vendas |
+| Table | Type | PK | FKs | Description |
+|-------|------|----|----|-------------|
+| `clientes` | Masters | id_cliente | - | Customer data |
+| `produtos` | Masters | id_produto | - | Product catalog |
+| `preco_competidores` | Transactional | - | id_produto → produtos | Competitor prices |
+| `vendas` | Transactional | id_venda | id_cliente, id_produto | Sales history |
 
-**Relacionamentos**:
+**Relationships**:
 ```
 clientes ──FK── vendas ──FK── produtos ──FK── preco_competidores
 ```
 
-Para schema SQL completo, ver `create_tables.sql`
+For complete SQL schema, see `create_tables.sql`
 
 ---
 
 ## 🚨 Troubleshooting
 
 ### ❌ "FileNotFoundError: credentials.json"
-**Solução**: Coloque arquivo em `credentials/credentials.json`
+**Solution**: Place file in `credentials/credentials.json`
 
 ### ❌ "SUPABASE_URL not found"
-**Solução**: Crie `.env` com `SUPABASE_URL` e `SUPABASE_KEY`
+**Solution**: Create `.env` with `SUPABASE_URL` and `SUPABASE_KEY`
 
 ### ❌ "Foreign key constraint violated"
-**Solução**: Verifique se `clientes` e `produtos` foram inseridos ANTES de `vendas`
+**Solution**: Verify `clientes` and `produtos` were inserted BEFORE `vendas`
 
 ### ❌ "Spreadsheet not found"
-**Solução**: 
-- Confirme nome exato em `.env` (case-sensitive)
-- Compartilhe Google Sheet com email do Service Account
+**Solution**: 
+- Confirm exact name in `.env` (case-sensitive)
+- Share Google Sheet with Service Account email
 
-### ⚠️ "Script demora muito (> 5 min)"
-**Solução**: Verifique quota da API Google Sheets e conexão com Supabase
+### ⚠️ "Script takes too long (> 5 min)"
+**Solution**: Check Google Sheets API quota and Supabase connection
 
-### 📊 "Muitos erros de FK (Foreign Key)"
-**Solução**: 
-- Verifique IDs de clientes e produtos no Google Sheets
-- Confirme que `clientes` e `produtos` foram sincronizados primeiro
-- Execute `test_connection.py` para diagnosticar
+### 📊 "Many FK (Foreign Key) errors"
+**Solution**: 
+- Check customer and product IDs in Google Sheets
+- Confirm `clientes` and `produtos` were synchronized first
+- Run `test_connection.py` to diagnose
 
 ---
 
-## 📚 Documentação Completa
+## 📚 Complete Documentation
 
-Para detalhes técnicos, ver [ARCHITECTURE.md](ARCHITECTURE.md):
-- Explicação das 6 camadas em detalhes
-- Exemplos de código (todas funções)
+For technical details, see [ARCHITECTURE.md](ARCHITECTURE.md):
+- Explanation of 6 layers in detail
+- Code examples (all functions)
 - Performance benchmarks
-- Padrões de design
-- Tratamento de erros
-- Fluxo de dados completo
+- Design patterns
+- Error handling
+- Complete data flow
 
 ---
 
-## 🔐 Segurança
+## 🔐 Security
 
-⚠️ **NUNCA commitar**:
-- `credentials.json` (chaves do Google)
-- `.env` (chaves do Supabase)
-- Qualquer arquivo com tokens/credenciais
+⚠️ **NEVER commit**:
+- `credentials.json` (Google keys)
+- `.env` (Supabase keys)
+- Any file with tokens/credentials
 
-Verificar `.gitignore`:
+Check `.gitignore`:
 ```
 credentials.json
 .env
@@ -259,25 +259,25 @@ venv/
 
 ---
 
-## 📊 Scripts Disponíveis
+## 📊 Available Scripts
 
-| Script | Propósito | Tempo |
-|--------|-----------|-------|
-| `src/validate_and_import.py` | 🚀 ETL com 6 camadas | 2-3 min |
-| `src/generate_daily_sales.py` | Gerador de vendas (3 por ciclo) | < 30 seg |
-| `src/sync_sheets.py` | Alternativa legada (2 etapas) | 1-2 min |
-| `test_connection.py` | Diagnóstico de conectividade | < 5 seg |
+| Script | Purpose | Time |
+|--------|---------|------|
+| `src/validate_and_import.py` | 🚀 ETL with 6 layers | 2-3 min |
+| `src/generate_daily_sales.py` | Sales generator (3 per cycle) | < 30 sec |
+| `src/sync_sheets.py` | Legacy alternative (2 stages) | 1-2 min |
+| `test_connection.py` | Connectivity diagnostics | < 5 sec |
 
 ---
 
-## 🔗 Referências Úteis
+## 🔗 Useful References
 
-- [Google Cloud Console](https://console.cloud.google.com) - Criar Service Account
-- [Supabase Dashboard](https://supabase.com/dashboard) - Gerenciar banco
+- [Google Cloud Console](https://console.cloud.google.com) - Create Service Account
+- [Supabase Dashboard](https://supabase.com/dashboard) - Manage database
 - [gspread Docs](https://docs.gspread.org) - Google Sheets API
-- [Supabase Python SDK](https://supabase.com/docs/reference/python) - Cliente Python
+- [Supabase Python SDK](https://supabase.com/docs/reference/python) - Python Client
 
 ---
 
-**Última atualização**: Janeiro 2026  
-**Versão**: 3.1 (6 Camadas ETL com validate_and_import.py)
+**Last Update**: January 2026  
+**Version**: 3.1 (6 Layer ETL with validate_and_import.py)
